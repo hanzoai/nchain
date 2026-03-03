@@ -26,7 +26,7 @@ type NetworkReconciler struct {
 
 // +kubebuilder:rbac:groups=nchain.hanzo.ai,resources=networks,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=nchain.hanzo.ai,resources=networks/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=nchain.hanzo.ai,resources=nodeclusters;chains;indexers;explorers;bridges;gateways,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=nchain.hanzo.ai,resources=nodeclusters;chains;indexers;explorers;bridges;gateways;clouds,verbs=get;list;watch;create;update;patch;delete
 
 func (r *NetworkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := r.Log.WithValues("network", req.NamespacedName)
@@ -139,6 +139,36 @@ func (r *NetworkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		}
 	}
 
+	// Reconcile Cloud child CR if spec.cloud is set.
+	if network.Spec.Cloud != nil && network.Spec.Cloud.Enabled {
+		child := &v1alpha1.Cloud{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      network.Name + "-cloud",
+				Namespace: network.Namespace,
+				Labels:    mergeWithNetworkLabels(&network, "cloud", "cloud"),
+			},
+		}
+		// Map inline NetworkCloudSpec to standalone CloudSpec.
+		if network.Spec.Cloud.APIImage != nil {
+			child.Spec.API.Image = network.Spec.Cloud.APIImage
+		}
+		if network.Spec.Cloud.WebImage != nil {
+			child.Spec.Web.Image = network.Spec.Cloud.WebImage
+		}
+		if network.Spec.Cloud.Replicas != nil {
+			child.Spec.API.Replicas = network.Spec.Cloud.Replicas
+		}
+		if network.Spec.Cloud.Ingress != nil {
+			child.Spec.Ingress = network.Spec.Cloud.Ingress
+		}
+		if network.Spec.Cloud.Database != nil && network.Spec.Cloud.Database.CredentialsSecret != "" {
+			child.Spec.Database.CredentialsSecret = network.Spec.Cloud.Database.CredentialsSecret
+		}
+		if err := r.reconcileChild(ctx, &network, child); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+
 	// Aggregate status from children.
 	network.Status.ObservedGeneration = network.Generation
 	network.Status.ClusterCount = int32(len(network.Spec.Clusters))
@@ -239,6 +269,7 @@ func (r *NetworkReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&v1alpha1.Explorer{}).
 		Owns(&v1alpha1.Bridge{}).
 		Owns(&v1alpha1.Gateway{}).
+		Owns(&v1alpha1.Cloud{}).
 		WithEventFilter(specChangePred()).
 		Complete(r)
 }

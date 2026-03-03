@@ -424,7 +424,7 @@ func (in *S3SnapshotSpec) DeepCopy() *S3SnapshotSpec {
 	return out
 }
 
-func (in *CloudSpec) DeepCopyInto(out *CloudSpec) {
+func (in *NetworkCloudSpec) DeepCopyInto(out *NetworkCloudSpec) {
 	*out = *in
 	if in.APIImage != nil {
 		in, out := &in.APIImage, &out.APIImage
@@ -453,11 +453,11 @@ func (in *CloudSpec) DeepCopyInto(out *CloudSpec) {
 	}
 }
 
-func (in *CloudSpec) DeepCopy() *CloudSpec {
+func (in *NetworkCloudSpec) DeepCopy() *NetworkCloudSpec {
 	if in == nil {
 		return nil
 	}
-	out := new(CloudSpec)
+	out := new(NetworkCloudSpec)
 	in.DeepCopyInto(out)
 	return out
 }
@@ -496,6 +496,291 @@ func (in *RateLimitConfig) DeepCopy() *RateLimitConfig {
 	out := new(RateLimitConfig)
 	in.DeepCopyInto(out)
 	return out
+}
+
+// --- cloud_types.go ---
+
+func (in *BrandConfig) DeepCopyInto(out *BrandConfig) {
+	*out = *in
+	out.IAM = in.IAM
+}
+
+func (in *BrandConfig) DeepCopy() *BrandConfig {
+	if in == nil {
+		return nil
+	}
+	out := new(BrandConfig)
+	in.DeepCopyInto(out)
+	return out
+}
+
+func (in *IAMConfig) DeepCopyInto(out *IAMConfig) {
+	*out = *in
+}
+
+func (in *IAMConfig) DeepCopy() *IAMConfig {
+	if in == nil {
+		return nil
+	}
+	out := new(IAMConfig)
+	in.DeepCopyInto(out)
+	return out
+}
+
+func (in *CloudAPISpec) DeepCopyInto(out *CloudAPISpec) {
+	*out = *in
+	if in.Image != nil {
+		in, out := &in.Image, &out.Image
+		*out = new(ImageSpec)
+		**out = **in
+	}
+	if in.Replicas != nil {
+		in, out := &in.Replicas, &out.Replicas
+		*out = new(int32)
+		**out = **in
+	}
+	if in.Resources != nil {
+		in, out := &in.Resources, &out.Resources
+		*out = new(ResourceRequirements)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.Autoscaling != nil {
+		in, out := &in.Autoscaling, &out.Autoscaling
+		*out = new(AutoscalingSpec)
+		(*in).DeepCopyInto(*out)
+	}
+}
+
+func (in *CloudAPISpec) DeepCopy() *CloudAPISpec {
+	if in == nil {
+		return nil
+	}
+	out := new(CloudAPISpec)
+	in.DeepCopyInto(out)
+	return out
+}
+
+func (in *CloudWebSpec) DeepCopyInto(out *CloudWebSpec) {
+	*out = *in
+	if in.Image != nil {
+		in, out := &in.Image, &out.Image
+		*out = new(ImageSpec)
+		**out = **in
+	}
+	if in.Replicas != nil {
+		in, out := &in.Replicas, &out.Replicas
+		*out = new(int32)
+		**out = **in
+	}
+	if in.Resources != nil {
+		in, out := &in.Resources, &out.Resources
+		*out = new(ResourceRequirements)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.Autoscaling != nil {
+		in, out := &in.Autoscaling, &out.Autoscaling
+		*out = new(AutoscalingSpec)
+		(*in).DeepCopyInto(*out)
+	}
+}
+
+func (in *CloudWebSpec) DeepCopy() *CloudWebSpec {
+	if in == nil {
+		return nil
+	}
+	out := new(CloudWebSpec)
+	in.DeepCopyInto(out)
+	return out
+}
+
+func (in *AutoscalingSpec) DeepCopyInto(out *AutoscalingSpec) {
+	*out = *in
+	if in.MinReplicas != nil {
+		in, out := &in.MinReplicas, &out.MinReplicas
+		*out = new(int32)
+		**out = **in
+	}
+	if in.MaxReplicas != nil {
+		in, out := &in.MaxReplicas, &out.MaxReplicas
+		*out = new(int32)
+		**out = **in
+	}
+	if in.TargetCPU != nil {
+		in, out := &in.TargetCPU, &out.TargetCPU
+		*out = new(int32)
+		**out = **in
+	}
+	if in.TargetMemory != nil {
+		in, out := &in.TargetMemory, &out.TargetMemory
+		*out = new(int32)
+		**out = **in
+	}
+}
+
+func (in *AutoscalingSpec) DeepCopy() *AutoscalingSpec {
+	if in == nil {
+		return nil
+	}
+	out := new(AutoscalingSpec)
+	in.DeepCopyInto(out)
+	return out
+}
+
+func (in *CloudDatabaseSpec) DeepCopyInto(out *CloudDatabaseSpec) {
+	*out = *in
+}
+
+func (in *CloudDatabaseSpec) DeepCopy() *CloudDatabaseSpec {
+	if in == nil {
+		return nil
+	}
+	out := new(CloudDatabaseSpec)
+	in.DeepCopyInto(out)
+	return out
+}
+
+func (in *CloudFeaturesSpec) DeepCopyInto(out *CloudFeaturesSpec) {
+	*out = *in
+}
+
+func (in *CloudFeaturesSpec) DeepCopy() *CloudFeaturesSpec {
+	if in == nil {
+		return nil
+	}
+	out := new(CloudFeaturesSpec)
+	in.DeepCopyInto(out)
+	return out
+}
+
+func (in *CloudSpec) DeepCopyInto(out *CloudSpec) {
+	*out = *in
+	if in.Brands != nil {
+		in, out := &in.Brands, &out.Brands
+		*out = make([]BrandConfig, len(*in))
+		copy(*out, *in)
+	}
+	in.API.DeepCopyInto(&out.API)
+	in.Web.DeepCopyInto(&out.Web)
+	out.Database = in.Database
+	out.Features = in.Features
+	if in.Ingress != nil {
+		in, out := &in.Ingress, &out.Ingress
+		*out = new(IngressSpec)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.KMSSecrets != nil {
+		in, out := &in.KMSSecrets, &out.KMSSecrets
+		*out = make([]KMSSecretRef, len(*in))
+		copy(*out, *in)
+	}
+	if in.Env != nil {
+		in, out := &in.Env, &out.Env
+		*out = make([]corev1.EnvVar, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
+	if in.Labels != nil {
+		in, out := &in.Labels, &out.Labels
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
+	if in.Annotations != nil {
+		in, out := &in.Annotations, &out.Annotations
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
+	if in.ImagePullSecrets != nil {
+		in, out := &in.ImagePullSecrets, &out.ImagePullSecrets
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
+}
+
+func (in *CloudSpec) DeepCopy() *CloudSpec {
+	if in == nil {
+		return nil
+	}
+	out := new(CloudSpec)
+	in.DeepCopyInto(out)
+	return out
+}
+
+func (in *CloudStatus) DeepCopyInto(out *CloudStatus) {
+	*out = *in
+	if in.Conditions != nil {
+		in, out := &in.Conditions, &out.Conditions
+		*out = make([]metav1.Condition, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
+}
+
+func (in *CloudStatus) DeepCopy() *CloudStatus {
+	if in == nil {
+		return nil
+	}
+	out := new(CloudStatus)
+	in.DeepCopyInto(out)
+	return out
+}
+
+func (in *Cloud) DeepCopyInto(out *Cloud) {
+	*out = *in
+	out.TypeMeta = in.TypeMeta
+	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
+	in.Spec.DeepCopyInto(&out.Spec)
+	in.Status.DeepCopyInto(&out.Status)
+}
+
+func (in *Cloud) DeepCopy() *Cloud {
+	if in == nil {
+		return nil
+	}
+	out := new(Cloud)
+	in.DeepCopyInto(out)
+	return out
+}
+
+func (in *Cloud) DeepCopyObject() runtime.Object {
+	if c := in.DeepCopy(); c != nil {
+		return c
+	}
+	return nil
+}
+
+func (in *CloudList) DeepCopyInto(out *CloudList) {
+	*out = *in
+	out.TypeMeta = in.TypeMeta
+	in.ListMeta.DeepCopyInto(&out.ListMeta)
+	if in.Items != nil {
+		in, out := &in.Items, &out.Items
+		*out = make([]Cloud, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
+}
+
+func (in *CloudList) DeepCopy() *CloudList {
+	if in == nil {
+		return nil
+	}
+	out := new(CloudList)
+	in.DeepCopyInto(out)
+	return out
+}
+
+func (in *CloudList) DeepCopyObject() runtime.Object {
+	if c := in.DeepCopy(); c != nil {
+		return c
+	}
+	return nil
 }
 
 // --- nodecluster_types.go ---
@@ -1333,7 +1618,7 @@ func (in *NetworkSpec) DeepCopyInto(out *NetworkSpec) {
 	}
 	if in.Cloud != nil {
 		in, out := &in.Cloud, &out.Cloud
-		*out = new(CloudSpec)
+		*out = new(NetworkCloudSpec)
 		(*in).DeepCopyInto(*out)
 	}
 	if in.Labels != nil {

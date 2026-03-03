@@ -2,8 +2,10 @@ package manifests
 
 import (
 	"fmt"
+	"strconv"
 
 	appsv1 "k8s.io/api/apps/v1"
+	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
@@ -724,4 +726,444 @@ func portOrDefault(port, def int32) int32 {
 func intStrPtr(val int32) *intstr.IntOrString {
 	v := intstr.FromInt32(val)
 	return &v
+}
+
+// --- Cloud (bootnode) manifest builders ---
+
+// BuildCloudAPIDeployment creates a Deployment for the Cloud API server.
+func BuildCloudAPIDeployment(cloud *v1alpha1.Cloud) *appsv1.Deployment {
+	name := cloud.Name + "-api"
+	labels := StandardLabels(name, "cloud-api", cloud.Name, "")
+	labels = MergeLabels(labels, cloud.Spec.Labels)
+	selectorLbls := SelectorLabels(name)
+
+	image := "ghcr.io/hanzoai/bootnode:api-latest"
+	pullPolicy := corev1.PullIfNotPresent
+	if cloud.Spec.API.Image != nil {
+		image = fmt.Sprintf("%s:%s", cloud.Spec.API.Image.Repository, tagOrDefault(cloud.Spec.API.Image.Tag))
+		pullPolicy = cloud.Spec.API.Image.PullPolicy
+	}
+
+	replicas := derefInt32Ptr(cloud.Spec.API.Replicas, 3)
+
+	// Build env vars: database credentials from secret + brand IAM vars + features.
+	env := []corev1.EnvVar{
+		{Name: "APP_ENV", Value: "production"},
+		{Name: "FEATURE_WALLETS", Value: strconv.FormatBool(cloud.Spec.Features.Wallets)},
+		{Name: "FEATURE_BUNDLER", Value: strconv.FormatBool(cloud.Spec.Features.Bundler)},
+		{Name: "FEATURE_NFTS", Value: strconv.FormatBool(cloud.Spec.Features.NFTs)},
+		{Name: "FEATURE_GAS", Value: strconv.FormatBool(cloud.Spec.Features.Gas)},
+		{Name: "FEATURE_WEBHOOKS", Value: strconv.FormatBool(cloud.Spec.Features.Webhooks)},
+		{Name: "DATABASE_URL", ValueFrom: &corev1.EnvVarSource{
+			SecretKeyRef: &corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{Name: cloud.Spec.Database.CredentialsSecret},
+				Key:                  "database-url",
+			},
+		}},
+		{Name: "REDIS_URL", ValueFrom: &corev1.EnvVarSource{
+			SecretKeyRef: &corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{Name: cloud.Spec.Database.CredentialsSecret},
+				Key:                  "redis-url",
+			},
+		}},
+	}
+
+	// Add per-brand IAM env vars.
+	for i, brand := range cloud.Spec.Brands {
+		prefix := fmt.Sprintf("BRAND_%d_", i)
+		env = append(env,
+			corev1.EnvVar{Name: prefix + "NAME", Value: brand.Name},
+			corev1.EnvVar{Name: prefix + "IAM_URL", Value: brand.IAM.URL},
+			corev1.EnvVar{Name: prefix + "IAM_ORG", Value: brand.IAM.Org},
+			corev1.EnvVar{Name: prefix + "IAM_CLIENT_ID", Value: brand.IAM.ClientID},
+		)
+	}
+	env = append(env, cloud.Spec.Env...)
+
+	container := corev1.Container{
+		Name:            "api",
+		Image:           image,
+		ImagePullPolicy: pullPolicy,
+		Env:             env,
+		Ports: []corev1.ContainerPort{
+			{Name: "http", ContainerPort: 8000, Protocol: corev1.ProtocolTCP},
+		},
+		LivenessProbe: &corev1.Probe{
+			ProbeHandler: corev1.ProbeHandler{
+				HTTPGet: &corev1.HTTPGetAction{
+					Path: "/health",
+					Port: intstr.FromInt32(8000),
+				},
+			},
+			InitialDelaySeconds: 15,
+			PeriodSeconds:       20,
+			TimeoutSeconds:      5,
+			FailureThreshold:    3,
+		},
+		ReadinessProbe: &corev1.Probe{
+			ProbeHandler: corev1.ProbeHandler{
+				HTTPGet: &corev1.HTTPGetAction{
+					Path: "/health",
+					Port: intstr.FromInt32(8000),
+				},
+			},
+			InitialDelaySeconds: 5,
+			PeriodSeconds:       10,
+			TimeoutSeconds:      5,
+			FailureThreshold:    3,
+		},
+	}
+	if cloud.Spec.API.Resources != nil {
+		container.Resources = corev1.ResourceRequirements{
+			Requests: cloud.Spec.API.Resources.Requests,
+			Limits:   cloud.Spec.API.Resources.Limits,
+		}
+	}
+
+	var pullSecrets []corev1.LocalObjectReference
+	for _, s := range cloud.Spec.ImagePullSecrets {
+		pullSecrets = append(pullSecrets, corev1.LocalObjectReference{Name: s})
+	}
+
+	terminationGrace := int64(30)
+
+	return &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        name,
+			Namespace:   cloud.Namespace,
+			Labels:      labels,
+			Annotations: cloud.Spec.Annotations,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: &replicas,
+			Selector: &metav1.LabelSelector{MatchLabels: selectorLbls},
+			Strategy: appsv1.DeploymentStrategy{
+				Type: appsv1.RollingUpdateDeploymentStrategyType,
+				RollingUpdate: &appsv1.RollingUpdateDeployment{
+					MaxSurge:       intStrPtr(1),
+					MaxUnavailable: intStrPtr(0),
+				},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels:      MergeLabels(labels, selectorLbls),
+					Annotations: cloud.Spec.Annotations,
+				},
+				Spec: corev1.PodSpec{
+					Containers:                    []corev1.Container{container},
+					ImagePullSecrets:              pullSecrets,
+					TerminationGracePeriodSeconds: &terminationGrace,
+				},
+			},
+		},
+	}
+}
+
+// BuildCloudWebDeployment creates a Deployment for a single brand's web frontend.
+func BuildCloudWebDeployment(cloud *v1alpha1.Cloud, brand v1alpha1.BrandConfig) *appsv1.Deployment {
+	name := cloud.Name + "-web-" + brand.Name
+	labels := StandardLabels(name, "cloud-web", cloud.Name, "")
+	labels = MergeLabels(labels, cloud.Spec.Labels)
+	labels["nchain.hanzo.ai/brand"] = brand.Name
+	selectorLbls := SelectorLabels(name)
+
+	image := "ghcr.io/hanzoai/bootnode:web-latest"
+	pullPolicy := corev1.PullIfNotPresent
+	if cloud.Spec.Web.Image != nil {
+		image = fmt.Sprintf("%s:%s", cloud.Spec.Web.Image.Repository, tagOrDefault(cloud.Spec.Web.Image.Tag))
+		pullPolicy = cloud.Spec.Web.Image.PullPolicy
+	}
+
+	replicas := derefInt32Ptr(cloud.Spec.Web.Replicas, 2)
+
+	apiURL := fmt.Sprintf("https://api.%s", brand.Domain)
+
+	env := []corev1.EnvVar{
+		{Name: "NODE_ENV", Value: "production"},
+		{Name: "NEXT_PUBLIC_BRAND", Value: brand.Name},
+		{Name: "NEXT_PUBLIC_API_URL", Value: apiURL},
+		{Name: "NEXT_PUBLIC_IAM_URL", Value: brand.IAM.URL},
+		{Name: "NEXT_PUBLIC_IAM_CLIENT_ID", Value: brand.IAM.ClientID},
+	}
+	env = append(env, cloud.Spec.Env...)
+
+	container := corev1.Container{
+		Name:            "web",
+		Image:           image,
+		ImagePullPolicy: pullPolicy,
+		Env:             env,
+		Ports: []corev1.ContainerPort{
+			{Name: "http", ContainerPort: 3001, Protocol: corev1.ProtocolTCP},
+		},
+		LivenessProbe: &corev1.Probe{
+			ProbeHandler: corev1.ProbeHandler{
+				HTTPGet: &corev1.HTTPGetAction{
+					Path: "/",
+					Port: intstr.FromInt32(3001),
+				},
+			},
+			InitialDelaySeconds: 10,
+			PeriodSeconds:       30,
+			TimeoutSeconds:      5,
+			FailureThreshold:    3,
+		},
+		ReadinessProbe: &corev1.Probe{
+			ProbeHandler: corev1.ProbeHandler{
+				HTTPGet: &corev1.HTTPGetAction{
+					Path: "/",
+					Port: intstr.FromInt32(3001),
+				},
+			},
+			InitialDelaySeconds: 5,
+			PeriodSeconds:       10,
+			TimeoutSeconds:      5,
+			FailureThreshold:    3,
+		},
+	}
+	if cloud.Spec.Web.Resources != nil {
+		container.Resources = corev1.ResourceRequirements{
+			Requests: cloud.Spec.Web.Resources.Requests,
+			Limits:   cloud.Spec.Web.Resources.Limits,
+		}
+	}
+
+	var pullSecrets []corev1.LocalObjectReference
+	for _, s := range cloud.Spec.ImagePullSecrets {
+		pullSecrets = append(pullSecrets, corev1.LocalObjectReference{Name: s})
+	}
+
+	terminationGrace := int64(30)
+
+	return &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        name,
+			Namespace:   cloud.Namespace,
+			Labels:      labels,
+			Annotations: cloud.Spec.Annotations,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: &replicas,
+			Selector: &metav1.LabelSelector{MatchLabels: selectorLbls},
+			Strategy: appsv1.DeploymentStrategy{
+				Type: appsv1.RollingUpdateDeploymentStrategyType,
+				RollingUpdate: &appsv1.RollingUpdateDeployment{
+					MaxSurge:       intStrPtr(1),
+					MaxUnavailable: intStrPtr(0),
+				},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels:      MergeLabels(labels, selectorLbls),
+					Annotations: cloud.Spec.Annotations,
+				},
+				Spec: corev1.PodSpec{
+					Containers:                    []corev1.Container{container},
+					ImagePullSecrets:              pullSecrets,
+					TerminationGracePeriodSeconds: &terminationGrace,
+				},
+			},
+		},
+	}
+}
+
+// BuildCloudService creates a ClusterIP Service for a Cloud component.
+func BuildCloudService(name, ns string, port int32, selectorLabels map[string]string) *corev1.Service {
+	labels := StandardLabels(name, "cloud", "", "")
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: ns,
+			Labels:    labels,
+		},
+		Spec: corev1.ServiceSpec{
+			Type:     corev1.ServiceTypeClusterIP,
+			Selector: selectorLabels,
+			Ports: []corev1.ServicePort{
+				{Name: "http", Port: port, TargetPort: intstr.FromString("http"), Protocol: corev1.ProtocolTCP},
+			},
+		},
+	}
+}
+
+// BuildCloudHPA creates an HPA for a Cloud component.
+func BuildCloudHPA(name, ns string, targetRef string, spec *v1alpha1.AutoscalingSpec) *autoscalingv2.HorizontalPodAutoscaler {
+	labels := StandardLabels(name+"-hpa", "cloud-hpa", "", "")
+	minReplicas := derefInt32Ptr(spec.MinReplicas, 2)
+	maxReplicas := derefInt32Ptr(spec.MaxReplicas, 20)
+
+	var metrics []autoscalingv2.MetricSpec
+	if spec.TargetCPU != nil {
+		metrics = append(metrics, autoscalingv2.MetricSpec{
+			Type: autoscalingv2.ResourceMetricSourceType,
+			Resource: &autoscalingv2.ResourceMetricSource{
+				Name: corev1.ResourceCPU,
+				Target: autoscalingv2.MetricTarget{
+					Type:               autoscalingv2.UtilizationMetricType,
+					AverageUtilization: spec.TargetCPU,
+				},
+			},
+		})
+	}
+	if spec.TargetMemory != nil {
+		metrics = append(metrics, autoscalingv2.MetricSpec{
+			Type: autoscalingv2.ResourceMetricSourceType,
+			Resource: &autoscalingv2.ResourceMetricSource{
+				Name: corev1.ResourceMemory,
+				Target: autoscalingv2.MetricTarget{
+					Type:               autoscalingv2.UtilizationMetricType,
+					AverageUtilization: spec.TargetMemory,
+				},
+			},
+		})
+	}
+
+	// Aggressive scale-up, conservative scale-down.
+	scaleUp := int32(60)   // 60s stabilization for scale-up
+	scaleDown := int32(300) // 5min stabilization for scale-down
+
+	return &autoscalingv2.HorizontalPodAutoscaler{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name + "-hpa",
+			Namespace: ns,
+			Labels:    labels,
+		},
+		Spec: autoscalingv2.HorizontalPodAutoscalerSpec{
+			ScaleTargetRef: autoscalingv2.CrossVersionObjectReference{
+				APIVersion: "apps/v1",
+				Kind:       "Deployment",
+				Name:       targetRef,
+			},
+			MinReplicas: &minReplicas,
+			MaxReplicas: maxReplicas,
+			Metrics:     metrics,
+			Behavior: &autoscalingv2.HorizontalPodAutoscalerBehavior{
+				ScaleUp: &autoscalingv2.HPAScalingRules{
+					StabilizationWindowSeconds: &scaleUp,
+				},
+				ScaleDown: &autoscalingv2.HPAScalingRules{
+					StabilizationWindowSeconds: &scaleDown,
+				},
+			},
+		},
+	}
+}
+
+// BuildCloudIngress creates an Ingress resource for a single brand.
+// It routes web3.{domain} to web, api.web3.{domain} to API, ws.web3.{domain} to API.
+func BuildCloudIngress(cloud *v1alpha1.Cloud, brand v1alpha1.BrandConfig) *networkingv1.Ingress {
+	name := cloud.Name + "-" + brand.Name
+	labels := StandardLabels(name, "cloud-ingress", cloud.Name, "")
+	labels["nchain.hanzo.ai/brand"] = brand.Name
+
+	pathType := networkingv1.PathTypePrefix
+
+	webSvcName := cloud.Name + "-web-" + brand.Name
+	apiSvcName := cloud.Name + "-api"
+
+	annotations := map[string]string{}
+	if cloud.Spec.Ingress != nil {
+		if cloud.Spec.Ingress.TLS {
+			clusterIssuer := cloud.Spec.Ingress.ClusterIssuer
+			if clusterIssuer == "" {
+				clusterIssuer = "letsencrypt-prod"
+			}
+			annotations["cert-manager.io/cluster-issuer"] = clusterIssuer
+		}
+		for k, v := range cloud.Spec.Ingress.Annotations {
+			annotations[k] = v
+		}
+	}
+
+	webHost := brand.Domain
+	apiHost := "api." + brand.Domain
+	wsHost := "ws." + brand.Domain
+
+	rules := []networkingv1.IngressRule{
+		{
+			Host: webHost,
+			IngressRuleValue: networkingv1.IngressRuleValue{
+				HTTP: &networkingv1.HTTPIngressRuleValue{
+					Paths: []networkingv1.HTTPIngressPath{{
+						Path:     "/",
+						PathType: &pathType,
+						Backend: networkingv1.IngressBackend{
+							Service: &networkingv1.IngressServiceBackend{
+								Name: webSvcName,
+								Port: networkingv1.ServiceBackendPort{Number: 3001},
+							},
+						},
+					}},
+				},
+			},
+		},
+		{
+			Host: apiHost,
+			IngressRuleValue: networkingv1.IngressRuleValue{
+				HTTP: &networkingv1.HTTPIngressRuleValue{
+					Paths: []networkingv1.HTTPIngressPath{{
+						Path:     "/",
+						PathType: &pathType,
+						Backend: networkingv1.IngressBackend{
+							Service: &networkingv1.IngressServiceBackend{
+								Name: apiSvcName,
+								Port: networkingv1.ServiceBackendPort{Number: 8000},
+							},
+						},
+					}},
+				},
+			},
+		},
+		{
+			Host: wsHost,
+			IngressRuleValue: networkingv1.IngressRuleValue{
+				HTTP: &networkingv1.HTTPIngressRuleValue{
+					Paths: []networkingv1.HTTPIngressPath{{
+						Path:     "/",
+						PathType: &pathType,
+						Backend: networkingv1.IngressBackend{
+							Service: &networkingv1.IngressServiceBackend{
+								Name: apiSvcName,
+								Port: networkingv1.ServiceBackendPort{Number: 8000},
+							},
+						},
+					}},
+				},
+			},
+		},
+	}
+
+	hosts := []string{webHost, apiHost, wsHost}
+	var tls []networkingv1.IngressTLS
+	if cloud.Spec.Ingress != nil && cloud.Spec.Ingress.TLS {
+		tls = append(tls, networkingv1.IngressTLS{
+			Hosts:      hosts,
+			SecretName: name + "-tls",
+		})
+	}
+
+	ing := &networkingv1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        name,
+			Namespace:   cloud.Namespace,
+			Labels:      labels,
+			Annotations: annotations,
+		},
+		Spec: networkingv1.IngressSpec{
+			Rules: rules,
+			TLS:   tls,
+		},
+	}
+
+	if cloud.Spec.Ingress != nil && cloud.Spec.Ingress.IngressClassName != "" {
+		ing.Spec.IngressClassName = &cloud.Spec.Ingress.IngressClassName
+	}
+
+	return ing
+}
+
+func derefInt32Ptr(p *int32, def int32) int32 {
+	if p != nil {
+		return *p
+	}
+	return def
 }
