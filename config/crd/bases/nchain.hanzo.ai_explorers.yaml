@@ -1,0 +1,324 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.20.1
+  name: explorers.nchain.hanzo.ai
+spec:
+  group: nchain.hanzo.ai
+  names:
+    kind: Explorer
+    listKind: ExplorerList
+    plural: explorers
+    shortNames:
+    - exp
+    singular: explorer
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.chainRef
+      name: Chain
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.backendReady
+      name: Backend
+      type: boolean
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          Explorer is the Schema for the explorers API.
+          It deploys a block explorer UI and API for a specific Chain.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ExplorerSpec defines the desired state of a block explorer.
+            properties:
+              backendImage:
+                description: BackendImage is the explorer backend container image
+                  (e.g., blockscout API).
+                properties:
+                  pullPolicy:
+                    default: IfNotPresent
+                    description: PullPolicy defines when to pull the image.
+                    enum:
+                    - Always
+                    - IfNotPresent
+                    - Never
+                    type: string
+                  repository:
+                    description: Repository is the container image repository.
+                    type: string
+                  tag:
+                    default: latest
+                    description: Tag is the container image tag.
+                    type: string
+                required:
+                - repository
+                type: object
+              chainRef:
+                description: ChainRef is the name of the Chain to explore.
+                type: string
+              database:
+                description: Database configures the explorer's database.
+                properties:
+                  credentialsSecret:
+                    description: CredentialsSecret references a Secret containing
+                      database credentials.
+                    type: string
+                  image:
+                    description: Image is the database container image (ignored for
+                      sqlite).
+                    properties:
+                      pullPolicy:
+                        default: IfNotPresent
+                        description: PullPolicy defines when to pull the image.
+                        enum:
+                        - Always
+                        - IfNotPresent
+                        - Never
+                        type: string
+                      repository:
+                        description: Repository is the container image repository.
+                        type: string
+                      tag:
+                        default: latest
+                        description: Tag is the container image tag.
+                        type: string
+                    required:
+                    - repository
+                    type: object
+                  storage:
+                    description: Storage configures persistent storage for the database.
+                    properties:
+                      retentionPolicy:
+                        allOf:
+                        - enum:
+                          - Retain
+                          - Delete
+                        - enum:
+                          - Retain
+                          - Delete
+                        default: Retain
+                        description: |-
+                          RetentionPolicy determines whether the PVC is retained or deleted
+                          when the parent resource is removed.
+                        type: string
+                      size:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        description: Size is the requested storage capacity.
+                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        x-kubernetes-int-or-string: true
+                      storageClassName:
+                        default: do-block-storage
+                        description: StorageClassName specifies the Kubernetes StorageClass
+                          to use.
+                        type: string
+                    required:
+                    - size
+                    type: object
+                  type:
+                    default: postgresql
+                    description: Type selects the database engine.
+                    enum:
+                    - postgresql
+                    - sqlite
+                    type: string
+                type: object
+              frontendImage:
+                description: FrontendImage is the optional separate UI container image.
+                properties:
+                  pullPolicy:
+                    default: IfNotPresent
+                    description: PullPolicy defines when to pull the image.
+                    enum:
+                    - Always
+                    - IfNotPresent
+                    - Never
+                    type: string
+                  repository:
+                    description: Repository is the container image repository.
+                    type: string
+                  tag:
+                    default: latest
+                    description: Tag is the container image tag.
+                    type: string
+                required:
+                - repository
+                type: object
+              indexerRef:
+                description: IndexerRef is the optional name of an Indexer dependency.
+                type: string
+              ingress:
+                description: Ingress configures external access to the explorer.
+                properties:
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    description: Annotations are additional annotations applied to
+                      the Ingress resource.
+                    type: object
+                  clusterIssuer:
+                    default: letsencrypt-prod
+                    description: ClusterIssuer is the cert-manager ClusterIssuer to
+                      use for TLS certificates.
+                    type: string
+                  enabled:
+                    description: Enabled controls whether an Ingress resource is created.
+                    type: boolean
+                  hosts:
+                    description: Hosts lists the hostnames for the Ingress.
+                    items:
+                      type: string
+                    type: array
+                  ingressClassName:
+                    default: ingress
+                    description: IngressClassName specifies the Ingress class to use.
+                    type: string
+                  tls:
+                    default: true
+                    description: TLS enables TLS termination on the Ingress.
+                    type: boolean
+                type: object
+              resources:
+                description: Resources (CPU/memory) for the explorer containers.
+                properties:
+                  limits:
+                    additionalProperties:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    description: Limits describes the maximum amount of compute resources
+                      allowed.
+                    type: object
+                  requests:
+                    additionalProperties:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    description: Requests describes the minimum amount of compute
+                      resources required.
+                    type: object
+                type: object
+            required:
+            - backendImage
+            - chainRef
+            type: object
+          status:
+            description: ExplorerStatus defines the observed state of Explorer.
+            properties:
+              backendReady:
+                description: BackendReady indicates whether the backend is running
+                  and healthy.
+                type: boolean
+              conditions:
+                description: Conditions represent the latest observations of the explorer's
+                  state.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              frontendReady:
+                description: FrontendReady indicates whether the frontend is running
+                  and healthy.
+                type: boolean
+              observedGeneration:
+                description: ObservedGeneration is the most recent generation observed
+                  by the controller.
+                format: int64
+                type: integer
+              phase:
+                description: Phase is the current lifecycle phase.
+                enum:
+                - Pending
+                - Creating
+                - Bootstrapping
+                - Running
+                - Degraded
+                - Deleting
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

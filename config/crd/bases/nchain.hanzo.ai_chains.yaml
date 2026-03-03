@@ -1,0 +1,195 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.20.1
+  name: chains.nchain.hanzo.ai
+spec:
+  group: nchain.hanzo.ai
+  names:
+    kind: Chain
+    listKind: ChainList
+    plural: chains
+    shortNames:
+    - chain
+    singular: chain
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.protocol
+      name: Protocol
+      type: string
+    - jsonPath: .spec.chainID
+      name: ChainID
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.blockHeight
+      name: Height
+      type: integer
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          Chain is the Schema for the chains API.
+          It defines a blockchain, subnet, or L2 that runs on a NodeCluster.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ChainSpec defines the desired state of a blockchain/subnet/L2.
+            properties:
+              chainID:
+                description: ChainID is the blockchain-specific chain identifier.
+                type: string
+              evmConfig:
+                description: EVMConfig holds EVM-specific chain configuration (gas
+                  limits, fees, etc.).
+                x-kubernetes-preserve-unknown-fields: true
+              genesis:
+                description: Genesis is the raw genesis configuration JSON.
+                x-kubernetes-preserve-unknown-fields: true
+              genesisConfigMap:
+                description: |-
+                  GenesisConfigMap references an existing ConfigMap containing genesis data.
+                  The ConfigMap key should be "genesis.json".
+                type: string
+              nodeClusterRef:
+                description: NodeClusterRef is the name of the NodeCluster that runs
+                  this chain.
+                type: string
+              protocol:
+                description: Protocol must match the parent NodeCluster's protocol.
+                enum:
+                - lux
+                - ethereum
+                - bitcoin
+                - cosmos
+                - substrate
+                - generic
+                type: string
+              protocolConfig:
+                description: ProtocolConfig is opaque protocol-specific chain settings.
+                x-kubernetes-preserve-unknown-fields: true
+              subnetID:
+                description: SubnetID associates this chain with a Lux subnet.
+                type: string
+              vmID:
+                description: VMID is the virtual machine identifier (e.g., for Lux
+                  subnet VMs).
+                type: string
+            required:
+            - chainID
+            - nodeClusterRef
+            - protocol
+            type: object
+          status:
+            description: ChainStatus defines the observed state of Chain.
+            properties:
+              blockHeight:
+                description: BlockHeight is the latest known block height.
+                format: int64
+                type: integer
+              conditions:
+                description: Conditions represent the latest observations of the chain's
+                  state.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              healthy:
+                description: Healthy indicates whether the chain is producing blocks
+                  normally.
+                type: boolean
+              observedGeneration:
+                description: ObservedGeneration is the most recent generation observed
+                  by the controller.
+                format: int64
+                type: integer
+              phase:
+                description: Phase is the current lifecycle phase.
+                enum:
+                - Pending
+                - Creating
+                - Bootstrapping
+                - Running
+                - Degraded
+                - Deleting
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
