@@ -1,0 +1,58 @@
+apiVersion: nchain.hanzo.ai/v1alpha1
+kind: NodeCluster
+metadata:
+  name: lux-devnet-validators
+  namespace: lux-devnet
+spec:
+  protocol: lux
+  networkID: "3"
+  replicas: 5
+  role: validator
+  image:
+    repository: ghcr.io/luxfi/node
+    tag: v1.23.23
+  ports:
+    rpc: 9650
+    p2p: 9651
+  storage:
+    storageClassName: do-block-storage
+    size: 50Gi
+  resources:
+    requests:
+      cpu: "1"
+      memory: 2Gi
+    limits:
+      cpu: "2"
+      memory: 4Gi
+  consensus:
+    algorithm: snow
+    params:
+      sybilProtectionEnabled: false
+      allowPrivateIPs: true
+  p2p:
+    allowPrivateIPs: true
+    useHostnames: true
+  api:
+    adminEnabled: true
+    metricsEnabled: true
+    indexEnabled: true
+  upgradeStrategy:
+    type: RollingCanary
+    maxUnavailable: 1
+    healthCheckBetweenRestarts: true
+    stabilizationSeconds: 60
+---
+apiVersion: nchain.hanzo.ai/v1alpha1
+kind: Gateway
+metadata:
+  name: lux-devnet-gateway
+  namespace: lux-devnet
+spec:
+  nodeClusterRef: lux-devnet-validators
+  replicas: 1
+  autoRoutes: true
+  ingress:
+    enabled: true
+    hosts:
+      - api.devnet.lux.network
+    tls: true

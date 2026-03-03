@@ -1,0 +1,33 @@
+apiVersion: nchain.hanzo.ai/v1alpha1
+kind: NodeCluster
+metadata:
+  name: eth-archive
+  namespace: ethereum
+spec:
+  protocol: ethereum
+  networkID: "1"
+  replicas: 2
+  role: archive
+  image:
+    repository: ghcr.io/hanzoai/reth
+    tag: latest
+  ports:
+    rpc: 8545
+    p2p: 30303
+    metrics: 9090
+    additional:
+      - name: authrpc
+        port: 8551
+  storage:
+    storageClassName: fast-ssd
+    size: 2Ti
+    retentionPolicy: Retain
+  resources:
+    requests:
+      cpu: "4"
+      memory: 16Gi
+    limits:
+      cpu: "8"
+      memory: 32Gi
+  upgradeStrategy:
+    type: OnDelete
