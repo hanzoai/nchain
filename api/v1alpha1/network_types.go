@@ -108,7 +108,7 @@ type NetworkSpec struct {
 
 	// Cloud configures the cloud management platform (bootnode API + web UI).
 	// +optional
-	Cloud *CloudSpec `json:"cloud,omitempty"`
+	Cloud *NetworkCloudSpec `json:"cloud,omitempty"`
 
 	// Labels are additional labels applied to all managed child resources.
 	// +optional

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	appsv1 "k8s.io/api/apps/v1"
+	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
@@ -91,6 +92,13 @@ func MutateFuncFor(existing, desired client.Object) controllerutil.MutateFn {
 			d, ok := desired.(*policyv1.PodDisruptionBudget)
 			if !ok {
 				return fmt.Errorf("desired is %T, want *policyv1.PodDisruptionBudget", desired)
+			}
+			e.Spec = d.Spec
+
+		case *autoscalingv2.HorizontalPodAutoscaler:
+			d, ok := desired.(*autoscalingv2.HorizontalPodAutoscaler)
+			if !ok {
+				return fmt.Errorf("desired is %T, want *autoscalingv2.HorizontalPodAutoscaler", desired)
 			}
 			e.Spec = d.Spec
 

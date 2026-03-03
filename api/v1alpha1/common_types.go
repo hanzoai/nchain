@@ -569,8 +569,9 @@ type S3SnapshotSpec struct {
 	RetentionCount int32 `json:"retentionCount,omitempty"`
 }
 
-// CloudSpec configures the cloud management platform (bootnode API + UI).
-type CloudSpec struct {
+// NetworkCloudSpec configures the cloud management platform inline within a Network.
+// For standalone Cloud CRDs, see cloud_types.go.
+type NetworkCloudSpec struct {
 	// Enabled controls whether the cloud management platform is deployed.
 	// +optional
 	Enabled bool `json:"enabled,omitempty"`

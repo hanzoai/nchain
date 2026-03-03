@@ -1,0 +1,87 @@
+apiVersion: nchain.hanzo.ai/v1alpha1
+kind: Cloud
+metadata:
+  name: web3-platform
+  namespace: bootnode
+spec:
+  brands:
+    - name: hanzo
+      domain: web3.hanzo.ai
+      iam:
+        url: https://hanzo.id
+        org: HANZO
+        clientID: hanzo-web3
+    - name: lux
+      domain: web3.lux.network
+      iam:
+        url: https://lux.id
+        org: LUX
+        clientID: lux-web3
+    - name: zoo
+      domain: web3.zoo.ngo
+      iam:
+        url: https://zoo.id
+        org: ZOO
+        clientID: zoo-web3
+    - name: pars
+      domain: web3.pars.id
+      iam:
+        url: https://pars.id
+        org: PARS
+        clientID: pars-web3
+  api:
+    replicas: 3
+    image:
+      repository: ghcr.io/hanzoai/bootnode
+      tag: api-latest
+    resources:
+      requests:
+        cpu: 500m
+        memory: 512Mi
+      limits:
+        cpu: "2"
+        memory: 2Gi
+    autoscaling:
+      enabled: true
+      minReplicas: 3
+      maxReplicas: 20
+      targetCPU: 70
+      targetMemory: 80
+  web:
+    replicas: 2
+    image:
+      repository: ghcr.io/hanzoai/bootnode
+      tag: web-latest
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 10
+      targetCPU: 70
+  database:
+    credentialsSecret: bootnode-secrets
+  features:
+    wallets: true
+    bundler: true
+    nfts: true
+    gas: true
+    webhooks: true
+  ingress:
+    enabled: true
+    tls: true
+    clusterIssuer: letsencrypt-prod
+  kmsSecrets:
+    - hostAPI: https://kms.hanzo.ai/api
+      projectSlug: bootnode
+      envSlug: production
+      secretsPath: /
+      credentialsRef:
+        name: kms-auth
+      managedSecretName: bootnode-secrets
+      resyncInterval: 60
