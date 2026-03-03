@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 
 	"github.com/hanzoai/nchain/api/v1alpha1"
 )
@@ -92,4 +93,18 @@ func (d *GenericDriver) NeedsConfigMap(_ *v1alpha1.NodeClusterSpec) bool {
 
 func (d *GenericDriver) BuildConfigMap(_ *v1alpha1.NodeClusterSpec) map[string]string {
 	return nil
+}
+
+func (d *GenericDriver) RecommendedResources(_ string) (corev1.ResourceList, corev1.ResourceList) {
+	return corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("1"),
+			corev1.ResourceMemory: resource.MustParse("2Gi"),
+		}, corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("2"),
+			corev1.ResourceMemory: resource.MustParse("4Gi"),
+		}
+}
+
+func (d *GenericDriver) RecommendedStorage(_ string) string {
+	return "50Gi"
 }

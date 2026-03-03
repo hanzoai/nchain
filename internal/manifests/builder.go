@@ -3,12 +3,14 @@ package manifests
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
@@ -75,11 +77,17 @@ func BuildNodeClusterStatefulSet(cluster *v1alpha1.NodeCluster, driver protocol.
 		ImagePullPolicy: cluster.Spec.Image.PullPolicy,
 	}
 
-	// Apply resource requirements.
+	// Apply resource requirements from spec, falling back to driver recommendations.
 	if cluster.Spec.Resources != nil {
 		container.Resources = corev1.ResourceRequirements{
 			Requests: cluster.Spec.Resources.Requests,
 			Limits:   cluster.Spec.Resources.Limits,
+		}
+	} else {
+		requests, limits := driver.RecommendedResources(cluster.Spec.Role)
+		container.Resources = corev1.ResourceRequirements{
+			Requests: requests,
+			Limits:   limits,
 		}
 	}
 
@@ -105,7 +113,7 @@ func BuildNodeClusterStatefulSet(cluster *v1alpha1.NodeCluster, driver protocol.
 	// Init containers from driver.
 	initContainers := driver.BuildInitContainers(&cluster.Spec)
 
-	// PVC template for chain data.
+	// PVC template for chain data. Use spec storage if provided, otherwise driver recommendation.
 	var pvcTemplates []corev1.PersistentVolumeClaim
 	if cluster.Spec.Storage != nil {
 		pvcTemplates = append(pvcTemplates, corev1.PersistentVolumeClaim{
@@ -121,6 +129,21 @@ func BuildNodeClusterStatefulSet(cluster *v1alpha1.NodeCluster, driver protocol.
 					},
 				},
 				StorageClassName: &cluster.Spec.Storage.StorageClassName,
+			},
+		})
+	} else if recStorage := driver.RecommendedStorage(cluster.Spec.Role); recStorage != "" {
+		pvcTemplates = append(pvcTemplates, corev1.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   "data",
+				Labels: selectorLbls,
+			},
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+				Resources: corev1.VolumeResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceStorage: resource.MustParse(recStorage),
+					},
+				},
 			},
 		})
 	}
@@ -730,7 +753,8 @@ func intStrPtr(val int32) *intstr.IntOrString {
 
 // --- Cloud (bootnode) manifest builders ---
 
-// BuildCloudAPIDeployment creates a Deployment for the Cloud API server.
+// BuildCloudAPIDeployment creates a single Deployment for the Cloud API server
+// that serves ALL brands. Brand routing is done at the API level by hostname.
 func BuildCloudAPIDeployment(cloud *v1alpha1.Cloud) *appsv1.Deployment {
 	name := cloud.Name + "-api"
 	labels := StandardLabels(name, "cloud-api", cloud.Name, "")
@@ -746,9 +770,17 @@ func BuildCloudAPIDeployment(cloud *v1alpha1.Cloud) *appsv1.Deployment {
 
 	replicas := derefInt32Ptr(cloud.Spec.API.Replicas, 3)
 
-	// Build env vars: database credentials from secret + brand IAM vars + features.
+	// Collect brand names for the BRANDS env var.
+	var brandNames []string
+	for _, brand := range cloud.Spec.Brands {
+		brandNames = append(brandNames, brand.Name)
+	}
+
+	// Build env vars: multi-tenant config + database credentials from secret + features.
 	env := []corev1.EnvVar{
 		{Name: "APP_ENV", Value: "production"},
+		{Name: "ENABLE_MULTI_TENANT", Value: "true"},
+		{Name: "BRANDS", Value: strings.Join(brandNames, ",")},
 		{Name: "FEATURE_WALLETS", Value: strconv.FormatBool(cloud.Spec.Features.Wallets)},
 		{Name: "FEATURE_BUNDLER", Value: strconv.FormatBool(cloud.Spec.Features.Bundler)},
 		{Name: "FEATURE_NFTS", Value: strconv.FormatBool(cloud.Spec.Features.NFTs)},
@@ -768,23 +800,59 @@ func BuildCloudAPIDeployment(cloud *v1alpha1.Cloud) *appsv1.Deployment {
 		}},
 	}
 
-	// Add per-brand IAM env vars.
-	for i, brand := range cloud.Spec.Brands {
-		prefix := fmt.Sprintf("BRAND_%d_", i)
+	// Add per-brand config: BRAND_{UPPER}_IAM_URL, BRAND_{UPPER}_IAM_ORG, etc.
+	for _, brand := range cloud.Spec.Brands {
+		prefix := "BRAND_" + strings.ToUpper(brand.Name) + "_"
 		env = append(env,
-			corev1.EnvVar{Name: prefix + "NAME", Value: brand.Name},
 			corev1.EnvVar{Name: prefix + "IAM_URL", Value: brand.IAM.URL},
 			corev1.EnvVar{Name: prefix + "IAM_ORG", Value: brand.IAM.Org},
 			corev1.EnvVar{Name: prefix + "IAM_CLIENT_ID", Value: brand.IAM.ClientID},
+			corev1.EnvVar{Name: prefix + "DOMAIN", Value: brand.Domain},
 		)
 	}
+
+	// Add cluster target env vars for NodeCluster routing.
+	for i, ct := range cloud.Spec.ClusterTargets {
+		prefix := fmt.Sprintf("CLUSTER_TARGET_%d_", i)
+		env = append(env,
+			corev1.EnvVar{Name: prefix + "BRAND", Value: ct.Brand},
+			corev1.EnvVar{Name: prefix + "NAMESPACE", Value: ct.Namespace},
+		)
+	}
+
 	env = append(env, cloud.Spec.Env...)
+
+	// Mount cluster target kubeconfigs as volumes.
+	var volumeMounts []corev1.VolumeMount
+	var volumes []corev1.Volume
+	for i, ct := range cloud.Spec.ClusterTargets {
+		volName := fmt.Sprintf("kubeconfig-%d", i)
+		mountPath := fmt.Sprintf("/etc/kubeconfig/%s", ct.Brand)
+		volumes = append(volumes, corev1.Volume{
+			Name: volName,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: ct.KubeconfigSecret,
+				},
+			},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      volName,
+			MountPath: mountPath,
+			ReadOnly:  true,
+		})
+		env = append(env, corev1.EnvVar{
+			Name:  fmt.Sprintf("CLUSTER_TARGET_%d_KUBECONFIG", i),
+			Value: mountPath + "/kubeconfig",
+		})
+	}
 
 	container := corev1.Container{
 		Name:            "api",
 		Image:           image,
 		ImagePullPolicy: pullPolicy,
 		Env:             env,
+		VolumeMounts:    volumeMounts,
 		Ports: []corev1.ContainerPort{
 			{Name: "http", ContainerPort: 8000, Protocol: corev1.ProtocolTCP},
 		},
@@ -851,6 +919,7 @@ func BuildCloudAPIDeployment(cloud *v1alpha1.Cloud) *appsv1.Deployment {
 				},
 				Spec: corev1.PodSpec{
 					Containers:                    []corev1.Container{container},
+					Volumes:                       volumes,
 					ImagePullSecrets:              pullSecrets,
 					TerminationGracePeriodSeconds: &terminationGrace,
 				},
@@ -1048,16 +1117,13 @@ func BuildCloudHPA(name, ns string, targetRef string, spec *v1alpha1.Autoscaling
 	}
 }
 
-// BuildCloudIngress creates an Ingress resource for a single brand.
-// It routes web3.{domain} to web, api.web3.{domain} to API, ws.web3.{domain} to API.
-func BuildCloudIngress(cloud *v1alpha1.Cloud, brand v1alpha1.BrandConfig) *networkingv1.Ingress {
-	name := cloud.Name + "-" + brand.Name
-	labels := StandardLabels(name, "cloud-ingress", cloud.Name, "")
-	labels["nchain.hanzo.ai/brand"] = brand.Name
+// BuildCloudAPIIngress creates a single Ingress for ALL brands' API and WebSocket
+// domains. All api.{domain} and ws.{domain} hosts point to the shared API service.
+func BuildCloudAPIIngress(cloud *v1alpha1.Cloud) *networkingv1.Ingress {
+	name := cloud.Name + "-api"
+	labels := StandardLabels(name, "cloud-api-ingress", cloud.Name, "")
 
 	pathType := networkingv1.PathTypePrefix
-
-	webSvcName := cloud.Name + "-web-" + brand.Name
 	apiSvcName := cloud.Name + "-api"
 
 	annotations := map[string]string{}
@@ -1074,9 +1140,88 @@ func BuildCloudIngress(cloud *v1alpha1.Cloud, brand v1alpha1.BrandConfig) *netwo
 		}
 	}
 
+	var rules []networkingv1.IngressRule
+	var allHosts []string
+
+	for _, brand := range cloud.Spec.Brands {
+		apiHost := "api." + brand.Domain
+		wsHost := "ws." + brand.Domain
+		allHosts = append(allHosts, apiHost, wsHost)
+
+		for _, host := range []string{apiHost, wsHost} {
+			rules = append(rules, networkingv1.IngressRule{
+				Host: host,
+				IngressRuleValue: networkingv1.IngressRuleValue{
+					HTTP: &networkingv1.HTTPIngressRuleValue{
+						Paths: []networkingv1.HTTPIngressPath{{
+							Path:     "/",
+							PathType: &pathType,
+							Backend: networkingv1.IngressBackend{
+								Service: &networkingv1.IngressServiceBackend{
+									Name: apiSvcName,
+									Port: networkingv1.ServiceBackendPort{Number: 8000},
+								},
+							},
+						}},
+					},
+				},
+			})
+		}
+	}
+
+	var tls []networkingv1.IngressTLS
+	if cloud.Spec.Ingress != nil && cloud.Spec.Ingress.TLS {
+		tls = append(tls, networkingv1.IngressTLS{
+			Hosts:      allHosts,
+			SecretName: name + "-tls",
+		})
+	}
+
+	ing := &networkingv1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        name,
+			Namespace:   cloud.Namespace,
+			Labels:      labels,
+			Annotations: annotations,
+		},
+		Spec: networkingv1.IngressSpec{
+			Rules: rules,
+			TLS:   tls,
+		},
+	}
+
+	if cloud.Spec.Ingress != nil && cloud.Spec.Ingress.IngressClassName != "" {
+		ing.Spec.IngressClassName = &cloud.Spec.Ingress.IngressClassName
+	}
+
+	return ing
+}
+
+// BuildCloudWebIngress creates an Ingress for a single brand's web frontend.
+// Only the web domain (brand.Domain) routes to that brand's web service.
+func BuildCloudWebIngress(cloud *v1alpha1.Cloud, brand v1alpha1.BrandConfig) *networkingv1.Ingress {
+	name := cloud.Name + "-web-" + brand.Name
+	labels := StandardLabels(name, "cloud-web-ingress", cloud.Name, "")
+	labels["nchain.hanzo.ai/brand"] = brand.Name
+
+	pathType := networkingv1.PathTypePrefix
+	webSvcName := cloud.Name + "-web-" + brand.Name
+
+	annotations := map[string]string{}
+	if cloud.Spec.Ingress != nil {
+		if cloud.Spec.Ingress.TLS {
+			clusterIssuer := cloud.Spec.Ingress.ClusterIssuer
+			if clusterIssuer == "" {
+				clusterIssuer = "letsencrypt-prod"
+			}
+			annotations["cert-manager.io/cluster-issuer"] = clusterIssuer
+		}
+		for k, v := range cloud.Spec.Ingress.Annotations {
+			annotations[k] = v
+		}
+	}
+
 	webHost := brand.Domain
-	apiHost := "api." + brand.Domain
-	wsHost := "ws." + brand.Domain
 
 	rules := []networkingv1.IngressRule{
 		{
@@ -1096,47 +1241,12 @@ func BuildCloudIngress(cloud *v1alpha1.Cloud, brand v1alpha1.BrandConfig) *netwo
 				},
 			},
 		},
-		{
-			Host: apiHost,
-			IngressRuleValue: networkingv1.IngressRuleValue{
-				HTTP: &networkingv1.HTTPIngressRuleValue{
-					Paths: []networkingv1.HTTPIngressPath{{
-						Path:     "/",
-						PathType: &pathType,
-						Backend: networkingv1.IngressBackend{
-							Service: &networkingv1.IngressServiceBackend{
-								Name: apiSvcName,
-								Port: networkingv1.ServiceBackendPort{Number: 8000},
-							},
-						},
-					}},
-				},
-			},
-		},
-		{
-			Host: wsHost,
-			IngressRuleValue: networkingv1.IngressRuleValue{
-				HTTP: &networkingv1.HTTPIngressRuleValue{
-					Paths: []networkingv1.HTTPIngressPath{{
-						Path:     "/",
-						PathType: &pathType,
-						Backend: networkingv1.IngressBackend{
-							Service: &networkingv1.IngressServiceBackend{
-								Name: apiSvcName,
-								Port: networkingv1.ServiceBackendPort{Number: 8000},
-							},
-						},
-					}},
-				},
-			},
-		},
 	}
 
-	hosts := []string{webHost, apiHost, wsHost}
 	var tls []networkingv1.IngressTLS
 	if cloud.Spec.Ingress != nil && cloud.Spec.Ingress.TLS {
 		tls = append(tls, networkingv1.IngressTLS{
-			Hosts:      hosts,
+			Hosts:      []string{webHost},
 			SecretName: name + "-tls",
 		})
 	}

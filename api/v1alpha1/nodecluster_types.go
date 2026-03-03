@@ -10,7 +10,7 @@ import (
 type NodeClusterSpec struct {
 	// Protocol selects the blockchain-specific driver.
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Enum=lux;ethereum;bitcoin;cosmos;substrate;generic
+	// +kubebuilder:validation:Enum=lux;ethereum;solana;bitcoin;cosmos;substrate;generic
 	Protocol string `json:"protocol"`
 
 	// Replicas is the number of nodes.

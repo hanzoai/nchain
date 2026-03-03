@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 
 	"github.com/hanzoai/nchain/api/v1alpha1"
 )
@@ -147,4 +148,34 @@ func (d *EthereumDriver) metricsPort(spec *v1alpha1.NodeClusterSpec) int32 {
 		return spec.Ports.Metrics
 	}
 	return ethMetricsPort
+}
+
+func (d *EthereumDriver) RecommendedResources(role string) (corev1.ResourceList, corev1.ResourceList) {
+	switch role {
+	case "archive":
+		return corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("8"),
+				corev1.ResourceMemory: resource.MustParse("32Gi"),
+			}, corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("16"),
+				corev1.ResourceMemory: resource.MustParse("64Gi"),
+			}
+	default: // validator, fullnode
+		return corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("4"),
+				corev1.ResourceMemory: resource.MustParse("16Gi"),
+			}, corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("8"),
+				corev1.ResourceMemory: resource.MustParse("32Gi"),
+			}
+	}
+}
+
+func (d *EthereumDriver) RecommendedStorage(role string) string {
+	switch role {
+	case "archive":
+		return "14Ti"
+	default:
+		return "2Ti"
+	}
 }

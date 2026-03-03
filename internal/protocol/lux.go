@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 
 	"github.com/hanzoai/nchain/api/v1alpha1"
 )
@@ -482,6 +483,46 @@ func imageTag(tag string) string {
 		return "latest"
 	}
 	return tag
+}
+
+func (d *LuxDriver) RecommendedResources(role string) (corev1.ResourceList, corev1.ResourceList) {
+	switch role {
+	case "archive":
+		return corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("4"),
+				corev1.ResourceMemory: resource.MustParse("8Gi"),
+			}, corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("8"),
+				corev1.ResourceMemory: resource.MustParse("16Gi"),
+			}
+	case "fullnode":
+		return corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("2"),
+				corev1.ResourceMemory: resource.MustParse("4Gi"),
+			}, corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("4"),
+				corev1.ResourceMemory: resource.MustParse("8Gi"),
+			}
+	default: // validator
+		return corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("2"),
+				corev1.ResourceMemory: resource.MustParse("4Gi"),
+			}, corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("4"),
+				corev1.ResourceMemory: resource.MustParse("8Gi"),
+			}
+	}
+}
+
+func (d *LuxDriver) RecommendedStorage(role string) string {
+	switch role {
+	case "archive":
+		return "500Gi"
+	case "fullnode":
+		return "200Gi"
+	default:
+		return "100Gi"
+	}
 }
 
 func int32Ptr(v int32) *int32 { return &v }

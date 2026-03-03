@@ -25,5 +25,8 @@ func Get(name string) (Driver, bool) {
 func init() {
 	Register(&LuxDriver{})
 	Register(&EthereumDriver{})
+	Register(&SolanaDriver{})
+	Register(&BitcoinDriver{})
+	Register(&CosmosDriver{})
 	Register(&GenericDriver{})
 }

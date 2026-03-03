@@ -45,4 +45,11 @@ type Driver interface {
 
 	// BuildConfigMap generates protocol-specific ConfigMap data.
 	BuildConfigMap(spec *v1alpha1.NodeClusterSpec) map[string]string
+
+	// RecommendedResources returns the recommended K8s resource requirements for this protocol.
+	// Returns min (requests) and recommended (limits) for validator, fullnode, and archive roles.
+	RecommendedResources(role string) (requests, limits corev1.ResourceList)
+
+	// RecommendedStorage returns the recommended storage size for this protocol and role.
+	RecommendedStorage(role string) string
 }
