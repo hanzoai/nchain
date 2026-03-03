@@ -1,0 +1,106 @@
+apiVersion: nchain.hanzo.ai/v1alpha1
+kind: Network
+metadata:
+  name: lux-mainnet
+  namespace: lux-mainnet
+spec:
+  protocol: lux
+  networkID: "1"
+  clusters:
+    - name: validators
+      spec:
+        replicas: 5
+        role: validator
+        image:
+          repository: ghcr.io/luxfi/node
+          tag: v1.23.23
+        ports:
+          rpc: 9630
+          p2p: 9631
+        storage:
+          storageClassName: fast-ssd
+          size: 100Gi
+        resources:
+          requests:
+            cpu: "2"
+            memory: 4Gi
+          limits:
+            cpu: "4"
+            memory: 8Gi
+        consensus:
+          algorithm: snow
+          params:
+            sybilProtectionEnabled: true
+            requireValidatorToConnect: true
+        keys:
+          secretName: lux-mainnet-staking
+          kms:
+            hostAPI: https://kms.lux.network/api
+            projectSlug: lux-infra
+            envSlug: mainnet
+            secretsPath: /staking
+            auth:
+              credentialsSecret: universal-auth-credentials
+              credentialsNamespace: lux-system
+            resyncInterval: 300
+        seedRestore:
+          enabled: true
+          sourceType: ObjectStore
+          objectStoreURL: http://s3.lux-system.svc.cluster.local:9000/lux-snapshots/mainnet/mainnet-node0-full.tar.gz
+        snapshotSchedule:
+          enabled: true
+          schedule: "0 * * * *"
+          s3Endpoint: http://s3.lux-system.svc.cluster.local:9000
+          s3Bucket: lux-snapshots
+          s3CredentialsSecret: s3-credentials
+          retentionCount: 5
+        healthPolicy:
+          requireInboundPeers: true
+          minInbound: 3
+          gracePeriodSeconds: 300
+          maxHeightSkew: 10
+        startupGate:
+          enabled: true
+          minPeers: 2
+          timeoutSeconds: 300
+          onTimeout: StartAnyway
+        chains:
+          - blockchainID: "2q9e4r6Mu3U68nU1fYjgbR6JvwrRx36CohpAX5UQxse55x1Q5"
+            alias: zoo
+          - blockchainID: "2wA8gHMzFwPXin9F2sRf5nQnL7yN8xTfH7sPZtRRMrqVPa7VR"
+            alias: hanzo
+          - blockchainID: "Fm84tHCJ9bPQxDvF5XdCJnWb7rZdEu4RKFNSX1TLfYzabmXQv"
+            alias: spc
+          - blockchainID: "2nGFfm6gfm7p8FpUGFPNqk6rCFsJHJds4nADj8PajTX5Y1tmVE"
+            alias: pars
+  gateways:
+    - name: api
+      spec:
+        replicas: 2
+        nodeClusterRef: lux-mainnet-validators
+        autoRoutes: true
+        rateLimits:
+          maxRate: 5000
+          every: 1s
+          clientMaxRate: 100
+        ingress:
+          enabled: true
+          hosts:
+            - api.lux.network
+          tls: true
+  explorers:
+    - name: mainnet
+      spec:
+        backendImage:
+          repository: ghcr.io/luxfi/blockscout-lux
+          tag: latest
+        chainRef: lux-mainnet-c-chain
+        database:
+          type: postgresql
+          credentialsSecret: explorer-db-credentials
+          storage:
+            size: 50Gi
+        ingress:
+          enabled: true
+          hosts:
+            - explorer.lux.network
