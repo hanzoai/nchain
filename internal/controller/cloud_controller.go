@@ -75,7 +75,15 @@ func (r *CloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		}
 	}
 
-	// Reconcile per-brand resources.
+	// Reconcile single API Ingress (multi-host for all brands' API/WS domains).
+	if cloud.Spec.Ingress != nil && cloud.Spec.Ingress.Enabled {
+		apiIng := manifests.BuildCloudAPIIngress(&cloud)
+		if err := r.reconcileOwned(ctx, &cloud, apiIng); err != nil {
+			return ctrl.Result{}, fmt.Errorf("reconciling API ingress: %w", err)
+		}
+	}
+
+	// Reconcile per-brand web resources.
 	var totalWebReady int32
 	for _, brand := range cloud.Spec.Brands {
 		// Web Deployment.
@@ -100,11 +108,11 @@ func (r *CloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 			}
 		}
 
-		// Ingress per brand.
+		// Web Ingress per brand (web domain only).
 		if cloud.Spec.Ingress != nil && cloud.Spec.Ingress.Enabled {
-			ing := manifests.BuildCloudIngress(&cloud, brand)
-			if err := r.reconcileOwned(ctx, &cloud, ing); err != nil {
-				return ctrl.Result{}, fmt.Errorf("reconciling ingress for %s: %w", brand.Name, err)
+			webIng := manifests.BuildCloudWebIngress(&cloud, brand)
+			if err := r.reconcileOwned(ctx, &cloud, webIng); err != nil {
+				return ctrl.Result{}, fmt.Errorf("reconciling web ingress for %s: %w", brand.Name, err)
 			}
 		}
 

@@ -527,6 +527,19 @@ func (in *IAMConfig) DeepCopy() *IAMConfig {
 	return out
 }
 
+func (in *ClusterTarget) DeepCopyInto(out *ClusterTarget) {
+	*out = *in
+}
+
+func (in *ClusterTarget) DeepCopy() *ClusterTarget {
+	if in == nil {
+		return nil
+	}
+	out := new(ClusterTarget)
+	in.DeepCopyInto(out)
+	return out
+}
+
 func (in *CloudAPISpec) DeepCopyInto(out *CloudAPISpec) {
 	*out = *in
 	if in.Image != nil {
@@ -667,6 +680,11 @@ func (in *CloudSpec) DeepCopyInto(out *CloudSpec) {
 		in, out := &in.Ingress, &out.Ingress
 		*out = new(IngressSpec)
 		(*in).DeepCopyInto(*out)
+	}
+	if in.ClusterTargets != nil {
+		in, out := &in.ClusterTargets, &out.ClusterTargets
+		*out = make([]ClusterTarget, len(*in))
+		copy(*out, *in)
 	}
 	if in.KMSSecrets != nil {
 		in, out := &in.KMSSecrets, &out.KMSSecrets

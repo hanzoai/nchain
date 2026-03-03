@@ -136,10 +136,28 @@ type CloudFeaturesSpec struct {
 	Webhooks bool `json:"webhooks,omitempty"`
 }
 
+// ClusterTarget maps a brand (or all brands) to a K8s cluster where NodeCluster
+// CRs should be created. The API uses the target cluster's kubeconfig to create
+// resources in the correct cluster.
+type ClusterTarget struct {
+	// Brand name this target applies to (or "*" for all).
+	// +kubebuilder:validation:Required
+	Brand string `json:"brand"`
+
+	// KubeconfigSecret is the name of the Secret containing the target cluster's kubeconfig.
+	// +kubebuilder:validation:Required
+	KubeconfigSecret string `json:"kubeconfigSecret"`
+
+	// Namespace where NodeCluster CRs should be created in the target cluster.
+	// +kubebuilder:validation:Required
+	Namespace string `json:"namespace"`
+}
+
 // CloudSpec defines the desired state of Cloud.
 type CloudSpec struct {
 	// Brands defines the multi-tenant brand configurations.
-	// Each brand gets its own Ingress with separate domain and IAM config.
+	// A single API deployment serves all brands, routing by hostname.
+	// Each brand gets its own web frontend deployment.
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:Required
 	Brands []BrandConfig `json:"brands"`
@@ -163,6 +181,11 @@ type CloudSpec struct {
 	// Ingress configures external access for all brands.
 	// +optional
 	Ingress *IngressSpec `json:"ingress,omitempty"`
+
+	// ClusterTargets maps brand to the K8s cluster where nodes should be deployed.
+	// The API uses this to create NodeCluster CRs in the right cluster.
+	// +optional
+	ClusterTargets []ClusterTarget `json:"clusterTargets,omitempty"`
 
 	// KMSSecrets configures KMS secret syncing.
 	// +optional
