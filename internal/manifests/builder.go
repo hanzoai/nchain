@@ -789,13 +789,13 @@ func BuildCloudAPIDeployment(cloud *v1alpha1.Cloud) *appsv1.Deployment {
 		{Name: "DATABASE_URL", ValueFrom: &corev1.EnvVarSource{
 			SecretKeyRef: &corev1.SecretKeySelector{
 				LocalObjectReference: corev1.LocalObjectReference{Name: cloud.Spec.Database.CredentialsSecret},
-				Key:                  "database-url",
+				Key:                  "DATABASE_URL",
 			},
 		}},
 		{Name: "REDIS_URL", ValueFrom: &corev1.EnvVarSource{
 			SecretKeyRef: &corev1.SecretKeySelector{
 				LocalObjectReference: corev1.LocalObjectReference{Name: cloud.Spec.Database.CredentialsSecret},
-				Key:                  "redis-url",
+				Key:                  "REDIS_URL",
 			},
 		}},
 	}
