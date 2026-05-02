@@ -20,7 +20,7 @@ spec:
     - name: zoo
       domain: web3.zoo.ngo
       iam:
-        url: https://zoo.id
+        url: https://zoolabs.id
         org: ZOO
         clientID: zoo-web3
     - name: pars
@@ -33,7 +33,7 @@ spec:
     replicas: 3
     image:
       repository: ghcr.io/hanzoai/bootnode
-      tag: api-latest
+      tag: sha-1ba1f09-amd64-api
     resources:
       requests:
         cpu: 500m
@@ -50,8 +50,11 @@ spec:
   web:
     replicas: 2
     image:
+      # Pushed under the bootnode package with -web tag suffix because GHCR
+      # 403s on first-push package creation for ghcr.io/hanzoai/bootnode-web.
+      # Keep deployment image pinned to a sha (semver-only deploy policy).
       repository: ghcr.io/hanzoai/bootnode
-      tag: web-latest
+      tag: sha-1ba1f09-amd64-web
     resources:
       requests:
         cpu: 100m
