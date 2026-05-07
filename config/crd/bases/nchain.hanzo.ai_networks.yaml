@@ -1513,7 +1513,7 @@ spec:
                         image:
                           description: |-
                             Image for the gateway container.
-                            Defaults to ghcr.io/hanzoai/gateway:latest (KrakenD-based).
+                            Defaults to ghcr.io/hanzoai/gateway:2.14.1 (KrakenD-based).
                           properties:
                             pullPolicy:
                               default: IfNotPresent
