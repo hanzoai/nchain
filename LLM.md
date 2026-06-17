@@ -1,4 +1,4 @@
-# LLM.md - Hanzo Nchain
+# Hanzo Nchain
 
 ## Overview
 Go module: github.com/hanzoai/nchain
