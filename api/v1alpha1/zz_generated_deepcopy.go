@@ -261,6 +261,75 @@ func (in *SnapshotScheduleSpec) DeepCopy() *SnapshotScheduleSpec {
 	return out
 }
 
+func (in *ReplicationSpec) DeepCopyInto(out *ReplicationSpec) {
+	*out = *in
+	if in.SourceNodeIndex != nil {
+		in, out := &in.SourceNodeIndex, &out.SourceNodeIndex
+		*out = new(int32)
+		**out = **in
+	}
+}
+
+func (in *ReplicationSpec) DeepCopy() *ReplicationSpec {
+	if in == nil {
+		return nil
+	}
+	out := new(ReplicationSpec)
+	in.DeepCopyInto(out)
+	return out
+}
+
+func (in *PerPodServiceSpec) DeepCopyInto(out *PerPodServiceSpec) {
+	*out = *in
+	if in.Annotations != nil {
+		in, out := &in.Annotations, &out.Annotations
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
+}
+
+func (in *PerPodServiceSpec) DeepCopy() *PerPodServiceSpec {
+	if in == nil {
+		return nil
+	}
+	out := new(PerPodServiceSpec)
+	in.DeepCopyInto(out)
+	return out
+}
+
+func (in *RLPImportSpec) DeepCopyInto(out *RLPImportSpec) {
+	*out = *in
+	if in.Parts != nil {
+		in, out := &in.Parts, &out.Parts
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
+}
+
+func (in *RLPImportSpec) DeepCopy() *RLPImportSpec {
+	if in == nil {
+		return nil
+	}
+	out := new(RLPImportSpec)
+	in.DeepCopyInto(out)
+	return out
+}
+
+func (in *NodeStatus) DeepCopyInto(out *NodeStatus) {
+	*out = *in
+}
+
+func (in *NodeStatus) DeepCopy() *NodeStatus {
+	if in == nil {
+		return nil
+	}
+	out := new(NodeStatus)
+	in.DeepCopyInto(out)
+	return out
+}
+
 func (in *UpgradeStrategySpec) DeepCopyInto(out *UpgradeStrategySpec) {
 	*out = *in
 	if in.MaxUnavailable != nil {
@@ -897,6 +966,21 @@ func (in *NodeClusterSpec) DeepCopyInto(out *NodeClusterSpec) {
 		*out = new(SnapshotScheduleSpec)
 		**out = **in
 	}
+	if in.Replication != nil {
+		in, out := &in.Replication, &out.Replication
+		*out = new(ReplicationSpec)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.PerPodService != nil {
+		in, out := &in.PerPodService, &out.PerPodService
+		*out = new(PerPodServiceSpec)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.RLPImport != nil {
+		in, out := &in.RLPImport, &out.RLPImport
+		*out = new(RLPImportSpec)
+		(*in).DeepCopyInto(*out)
+	}
 	in.UpgradeStrategy.DeepCopyInto(&out.UpgradeStrategy)
 	in.HealthPolicy.DeepCopyInto(&out.HealthPolicy)
 	if in.StartupGate != nil {
@@ -971,6 +1055,27 @@ func (in *NodeClusterSpec) DeepCopy() *NodeClusterSpec {
 
 func (in *NodeClusterStatus) DeepCopyInto(out *NodeClusterStatus) {
 	*out = *in
+	if in.Nodes != nil {
+		in, out := &in.Nodes, &out.Nodes
+		*out = make([]NodeStatus, len(*in))
+		copy(*out, *in)
+	}
+	if in.ExternalIPs != nil {
+		in, out := &in.ExternalIPs, &out.ExternalIPs
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
+	if in.DegradedReasons != nil {
+		in, out := &in.DegradedReasons, &out.DegradedReasons
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
+	if in.LastSnapshotTime != nil {
+		in, out := &in.LastSnapshotTime, &out.LastSnapshotTime
+		*out = (*in).DeepCopy()
+	}
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
 		*out = make([]metav1.Condition, len(*in))

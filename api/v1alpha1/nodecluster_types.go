@@ -65,9 +65,25 @@ type NodeClusterSpec struct {
 	// +optional
 	SeedRestore *SeedRestoreSpec `json:"seedRestore,omitempty"`
 
-	// SnapshotSchedule configures automated periodic backups.
+	// SnapshotSchedule configures operator-driven periodic backups (CronJob)
+	// uploaded to an object store, for backup/DR and as a seed-restore source.
 	// +optional
 	SnapshotSchedule *SnapshotScheduleSpec `json:"snapshotSchedule,omitempty"`
+
+	// Replication configures the node's native streaming replication (REPLICATE_*
+	// env), the preferred ongoing snapshot mechanism. Full snapshots plus
+	// continuous incrementals are streamed to an object store and restored on boot.
+	// +optional
+	Replication *ReplicationSpec `json:"replication,omitempty"`
+
+	// PerPodService configures per-pod LoadBalancer Services so each node has a
+	// stable external IP for P2P identity.
+	// +optional
+	PerPodService *PerPodServiceSpec `json:"perPodService,omitempty"`
+
+	// RLPImport configures a one-time C-chain RLP import for fast bootstrap.
+	// +optional
+	RLPImport *RLPImportSpec `json:"rlpImport,omitempty"`
 
 	// UpgradeStrategy controls how node upgrades are rolled out.
 	// +optional
@@ -144,6 +160,36 @@ type NodeClusterStatus struct {
 	// BootstrapComplete indicates whether the cluster has completed initial sync.
 	// +optional
 	BootstrapComplete bool `json:"bootstrapComplete,omitempty"`
+
+	// HealthyReplicas is the number of nodes that passed their health check.
+	// +optional
+	HealthyReplicas int32 `json:"healthyReplicas,omitempty"`
+
+	// HeightSkew is the P-chain block-height difference between the highest and
+	// lowest node (0 when all nodes agree).
+	// +optional
+	HeightSkew int64 `json:"heightSkew,omitempty"`
+
+	// TotalPeers is the sum of connected peers across all nodes.
+	// +optional
+	TotalPeers int32 `json:"totalPeers,omitempty"`
+
+	// Nodes reports per-node health and sync state.
+	// +optional
+	Nodes []NodeStatus `json:"nodes,omitempty"`
+
+	// ExternalIPs maps pod name to the external IP discovered from its per-pod
+	// LoadBalancer Service.
+	// +optional
+	ExternalIPs map[string]string `json:"externalIPs,omitempty"`
+
+	// DegradedReasons lists why the cluster is degraded (empty when healthy).
+	// +optional
+	DegradedReasons []string `json:"degradedReasons,omitempty"`
+
+	// LastSnapshotTime is when the most recent scheduled snapshot ran.
+	// +optional
+	LastSnapshotTime *metav1.Time `json:"lastSnapshotTime,omitempty"`
 
 	// Conditions represent the latest observations of the cluster's state.
 	// +optional

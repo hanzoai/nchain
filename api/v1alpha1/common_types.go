@@ -2,8 +2,8 @@ package v1alpha1
 
 import (
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 // Phase represents the lifecycle phase of a managed resource.
@@ -345,6 +345,16 @@ type SnapshotScheduleSpec struct {
 	// +optional
 	S3CredentialsSecret string `json:"s3CredentialsSecret,omitempty"`
 
+	// SourceNodeIndex is the StatefulSet ordinal whose data is snapshotted.
+	// +kubebuilder:default=0
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	SourceNodeIndex int32 `json:"sourceNodeIndex,omitempty"`
+
+	// Prefix is the object-store key prefix for snapshots. Defaults to the cluster name.
+	// +optional
+	Prefix string `json:"prefix,omitempty"`
+
 	// RetentionCount is the number of snapshots to retain.
 	// +kubebuilder:default=5
 	// +kubebuilder:validation:Minimum=1
@@ -352,14 +362,166 @@ type SnapshotScheduleSpec struct {
 	RetentionCount int32 `json:"retentionCount,omitempty"`
 }
 
+// ReplicationSpec drives the node's native streaming replication (the node's
+// ZapDB Replicator, configured via REPLICATE_* env). The node streams full
+// snapshots plus continuous incrementals to an S3-compatible object store and
+// restores from the latest snapshot on boot — no operator-side scan or RLP
+// export required. This is the preferred ongoing snapshot mechanism; the
+// SnapshotSchedule CronJob is kept only for backup/DR and as a seed source.
+//
+// Field names mirror the Go reference operator (luxfi/operator) so a CR
+// authored for either operator round-trips unchanged.
+type ReplicationSpec struct {
+	// Enabled controls whether streaming replication is active.
+	// +optional
+	Enabled bool `json:"enabled,omitempty"`
+
+	// S3Endpoint is the S3-compatible object-store endpoint.
+	// +optional
+	S3Endpoint string `json:"s3Endpoint,omitempty"`
+
+	// S3Bucket holds replication objects. Defaults to "replicate".
+	// +optional
+	S3Bucket string `json:"s3Bucket,omitempty"`
+
+	// S3Region is the object-store region.
+	// +optional
+	S3Region string `json:"s3Region,omitempty"`
+
+	// S3Path is the key prefix; defaults to the node's db path.
+	// +optional
+	S3Path string `json:"s3Path,omitempty"`
+
+	// S3UseSSL enables TLS to the object store.
+	// +optional
+	S3UseSSL bool `json:"s3UseSsl,omitempty"`
+
+	// CredentialsSecret is a Secret holding REPLICATE_S3_ACCESS_KEY / _SECRET_KEY.
+	// +optional
+	CredentialsSecret string `json:"credentialsSecret,omitempty"`
+
+	// AgeRecipient (an age public key) enables client-side encryption of snapshots.
+	// +optional
+	AgeRecipient string `json:"ageRecipient,omitempty"`
+
+	// AgeIdentitySecret is a Secret holding REPLICATE_AGE_IDENTITY for restore.
+	// +optional
+	AgeIdentitySecret string `json:"ageIdentitySecret,omitempty"`
+
+	// SourceNodeIndex, when set, restricts the backup loop to that ordinal;
+	// every node still restores on boot.
+	// +optional
+	SourceNodeIndex *int32 `json:"sourceNodeIndex,omitempty"`
+
+	// SnapshotIntervalSeconds between full snapshots. Defaults to 3600.
+	// +optional
+	SnapshotIntervalSeconds int64 `json:"snapshotIntervalSeconds,omitempty"`
+
+	// IncrementalIntervalSeconds between incrementals. Defaults to 5.
+	// +optional
+	IncrementalIntervalSeconds int64 `json:"incrementalIntervalSeconds,omitempty"`
+}
+
+// PerPodServiceSpec configures a per-pod LoadBalancer Service for each node,
+// giving every validator a stable external IP for P2P identity. The Services
+// are L4 (TCP) for raw P2P traffic — not HTTP ingress.
+type PerPodServiceSpec struct {
+	// Enabled controls whether per-pod LoadBalancer Services are created.
+	// +optional
+	Enabled bool `json:"enabled,omitempty"`
+
+	// Annotations are applied to each per-pod LoadBalancer Service
+	// (e.g. cloud-provider load-balancer configuration).
+	// +optional
+	Annotations map[string]string `json:"annotations,omitempty"`
+}
+
+// RLPImportSpec configures a one-time C-chain RLP import for fast bootstrap.
+// An init container downloads (optionally multi-part) and assembles the RLP
+// file, clears stale C-chain data, then imports it via admin_importChain
+// against a temporary local node. A marker file makes the import run once.
+type RLPImportSpec struct {
+	// Enabled controls whether the RLP import init container runs.
+	// +optional
+	Enabled bool `json:"enabled,omitempty"`
+
+	// BaseURL is the location the RLP file(s) are downloaded from.
+	// +kubebuilder:validation:Required
+	BaseURL string `json:"baseURL"`
+
+	// Filename is the RLP file name (e.g. "lux-mainnet-96369.rlp").
+	// +kubebuilder:validation:Required
+	Filename string `json:"filename"`
+
+	// MultiPart downloads BaseURL/<basename>.part.<suffix> for each Parts entry
+	// and concatenates them into Filename before import.
+	// +optional
+	MultiPart bool `json:"multiPart,omitempty"`
+
+	// Parts lists the part suffixes (e.g. "aa","ab") for multi-part downloads.
+	// +optional
+	Parts []string `json:"parts,omitempty"`
+
+	// MinHeight skips the import when the C-chain is already at or above this height.
+	// +kubebuilder:default=1
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	MinHeight int64 `json:"minHeight,omitempty"`
+
+	// TimeoutSeconds is the maximum time allowed for the import.
+	// +kubebuilder:default=7200
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	TimeoutSeconds int64 `json:"timeoutSeconds,omitempty"`
+
+	// CChainID is the C-chain blockchain ID whose data is cleared before import.
+	// +optional
+	CChainID string `json:"cChainID,omitempty"`
+}
+
+// NodeStatus reports per-node health and sync state polled from the node's
+// health and info APIs (/ext/health, /ext/info, /ext/bc/P, /ext/bc/C).
+type NodeStatus struct {
+	// Name is the pod name of the node.
+	Name string `json:"name"`
+
+	// NodeID is the node's cryptographic identity (info.getNodeID).
+	// +optional
+	NodeID string `json:"nodeID,omitempty"`
+
+	// ExternalIP is the node's external IP, discovered from its LoadBalancer Service.
+	// +optional
+	ExternalIP string `json:"externalIP,omitempty"`
+
+	// PChainHeight is the platform-chain block height (platform.getHeight).
+	// +optional
+	PChainHeight int64 `json:"pChainHeight,omitempty"`
+
+	// CChainHeight is the contract-chain block height (eth_blockNumber).
+	// +optional
+	CChainHeight int64 `json:"cChainHeight,omitempty"`
+
+	// ConnectedPeers is the number of peers this node is connected to.
+	// +optional
+	ConnectedPeers int32 `json:"connectedPeers,omitempty"`
+
+	// Bootstrapped indicates whether all tracked chains finished bootstrapping.
+	// +optional
+	Bootstrapped bool `json:"bootstrapped,omitempty"`
+
+	// Healthy indicates whether the node passed its health check.
+	// +optional
+	Healthy bool `json:"healthy,omitempty"`
+}
+
 // UpgradeStrategyType defines how node upgrades are performed.
 // +kubebuilder:validation:Enum=OnDelete;RollingCanary;RollingUpdate
 type UpgradeStrategyType string
 
 const (
-	UpgradeOnDelete       UpgradeStrategyType = "OnDelete"
-	UpgradeRollingCanary  UpgradeStrategyType = "RollingCanary"
-	UpgradeRollingUpdate  UpgradeStrategyType = "RollingUpdate"
+	UpgradeOnDelete      UpgradeStrategyType = "OnDelete"
+	UpgradeRollingCanary UpgradeStrategyType = "RollingCanary"
+	UpgradeRollingUpdate UpgradeStrategyType = "RollingUpdate"
 )
 
 // UpgradeStrategySpec configures how node upgrades are rolled out.

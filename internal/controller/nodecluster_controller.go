@@ -3,9 +3,12 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -32,7 +35,9 @@ type NodeClusterReconciler struct {
 // +kubebuilder:rbac:groups=nchain.hanzo.ai,resources=nodeclusters/finalizers,verbs=update
 // +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=services;configmaps,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch
 // +kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=batch,resources=cronjobs,verbs=get;list;watch;create;update;patch;delete
 
 func (r *NodeClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := r.Log.WithValues("nodecluster", req.NamespacedName)
@@ -67,8 +72,43 @@ func (r *NodeClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		}
 	}
 
+	// Resolve replicas, ports, image, and health endpoint once for reuse below.
+	replicas := derefInt32(cluster.Spec.Replicas, 3)
+	defaults := driver.DefaultPorts()
+	rpcPort := cluster.Spec.Ports.RPC
+	if rpcPort == 0 {
+		rpcPort = defaults.RPC
+	}
+	p2pPort := cluster.Spec.Ports.P2P
+	if p2pPort == 0 {
+		p2pPort = defaults.P2P
+	}
+	healthPath, healthPort := driver.HealthEndpoint(&cluster.Spec)
+	nodeImage := imageRef(cluster.Spec.Image)
+
 	// Build and reconcile StatefulSet.
 	desiredSts := manifests.BuildNodeClusterStatefulSet(&cluster, driver)
+
+	// Augment the node container with native streaming-replication env, and add
+	// the RLP-import and startup-gate init containers (ported validator behavior).
+	// Init order: driver containers (plugins, seed-restore) -> RLP import -> gate.
+	replEnv, replEnvFrom := replicationEnv(cluster.Spec.Replication)
+	if len(replEnv) > 0 || len(replEnvFrom) > 0 {
+		for i := range desiredSts.Spec.Template.Spec.Containers {
+			c := &desiredSts.Spec.Template.Spec.Containers[i]
+			if c.Name == "node" {
+				c.Env = append(c.Env, replEnv...)
+				c.EnvFrom = append(c.EnvFrom, replEnvFrom...)
+			}
+		}
+	}
+	if c := buildRLPImportInitContainer(&cluster, nodeImage, rpcPort, p2pPort); c != nil {
+		desiredSts.Spec.Template.Spec.InitContainers = append(desiredSts.Spec.Template.Spec.InitContainers, *c)
+	}
+	if c := buildStartupGateInitContainer(&cluster, nodeImage, healthPath, healthPort, replicas); c != nil {
+		desiredSts.Spec.Template.Spec.InitContainers = append(desiredSts.Spec.Template.Spec.InitContainers, *c)
+	}
+
 	if err := ctrl.SetControllerReference(&cluster, desiredSts, r.Scheme); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -126,7 +166,6 @@ func (r *NodeClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	// Build PDB if replicas > 1.
-	replicas := derefInt32(cluster.Spec.Replicas, 3)
 	if replicas > 1 {
 		desiredPDB := manifests.BuildPDB(cluster.Name, cluster.Namespace, manifests.SelectorLabels(cluster.Name))
 		if err := ctrl.SetControllerReference(&cluster, desiredPDB, r.Scheme); err != nil {
@@ -142,6 +181,21 @@ func (r *NodeClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		}
 	}
 
+	// Per-pod LoadBalancer Services for stable external P2P IPs (validator identity).
+	if cluster.Spec.PerPodService != nil && cluster.Spec.PerPodService.Enabled {
+		for i := int32(0); i < replicas; i++ {
+			svc := buildPerPodService(&cluster, i, rpcPort, p2pPort)
+			if err := r.reconcileOwned(ctx, &cluster, svc); err != nil {
+				return ctrl.Result{}, fmt.Errorf("reconciling per-pod service %d: %w", i, err)
+			}
+		}
+	}
+
+	// Operator-driven periodic snapshot CronJob (backup/DR + seed-restore source).
+	if err := r.reconcileSnapshotCronJob(ctx, &cluster, nodeImage, rpcPort); err != nil {
+		return ctrl.Result{}, fmt.Errorf("reconciling snapshot cronjob: %w", err)
+	}
+
 	// Update status from StatefulSet.
 	var currentSts appsv1.StatefulSet
 	if err := r.Get(ctx, client.ObjectKeyFromObject(desiredSts), &currentSts); err == nil {
@@ -149,24 +203,49 @@ func (r *NodeClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		cluster.Status.CurrentReplicas = currentSts.Status.CurrentReplicas
 	}
 
-	// Determine phase.
+	// Poll per-node health for lux validators (populates per-node and aggregate
+	// status: nodeID, peers, P/C heights, bootstrapped, healthy, height skew).
+	polled := false
+	if cluster.Spec.Protocol == "lux" {
+		polled = r.pollHealth(ctx, &cluster, rpcPort, replicas)
+	}
+
+	// Determine phase: stage by pod readiness, then refine with health for lux.
 	cluster.Status.ObservedGeneration = cluster.Generation
-	if cluster.Status.ReadyReplicas == replicas {
+	switch {
+	case cluster.Status.ReadyReplicas == 0:
+		cluster.Status.Phase = v1alpha1.PhaseCreating
+		status.SetCondition(&cluster.Status.Conditions, v1alpha1.ConditionTypeReady,
+			metav1.ConditionFalse, "NoReplicasReady", "No replicas are ready yet")
+	case cluster.Status.ReadyReplicas < replicas:
+		cluster.Status.Phase = v1alpha1.PhaseBootstrapping
+		status.SetCondition(&cluster.Status.Conditions, v1alpha1.ConditionTypeReady,
+			metav1.ConditionFalse, "PartiallyReady",
+			fmt.Sprintf("%d/%d replicas ready", cluster.Status.ReadyReplicas, replicas))
+	case polled && cluster.Status.HealthyReplicas == 0:
+		// Pods are ready but no node reports healthy yet — chains still bootstrapping.
+		cluster.Status.Phase = v1alpha1.PhaseBootstrapping
+		status.SetCondition(&cluster.Status.Conditions, v1alpha1.ConditionTypeReady,
+			metav1.ConditionFalse, "Bootstrapping", "Pods ready, nodes bootstrapping")
+	case polled && (cluster.Status.HealthyReplicas < replicas || len(cluster.Status.DegradedReasons) > 0):
+		cluster.Status.Phase = v1alpha1.PhaseDegraded
+		msg := fmt.Sprintf("%d/%d nodes healthy", cluster.Status.HealthyReplicas, replicas)
+		if len(cluster.Status.DegradedReasons) > 0 {
+			msg = strings.Join(cluster.Status.DegradedReasons, "; ")
+		}
+		status.SetCondition(&cluster.Status.Conditions, v1alpha1.ConditionTypeReady,
+			metav1.ConditionFalse, "Degraded", msg)
+		status.SetCondition(&cluster.Status.Conditions, v1alpha1.ConditionTypeDegraded,
+			metav1.ConditionTrue, "Degraded", msg)
+	default:
 		cluster.Status.Phase = v1alpha1.PhaseRunning
 		cluster.Status.BootstrapComplete = true
 		status.SetCondition(&cluster.Status.Conditions, v1alpha1.ConditionTypeReady,
 			metav1.ConditionTrue, "AllReplicasReady", "All node replicas are ready")
 		status.SetCondition(&cluster.Status.Conditions, v1alpha1.ConditionTypeProgressing,
 			metav1.ConditionFalse, "Complete", "Reconciliation complete")
-	} else if cluster.Status.ReadyReplicas > 0 {
-		cluster.Status.Phase = v1alpha1.PhaseBootstrapping
-		status.SetCondition(&cluster.Status.Conditions, v1alpha1.ConditionTypeReady,
-			metav1.ConditionFalse, "PartiallyReady",
-			fmt.Sprintf("%d/%d replicas ready", cluster.Status.ReadyReplicas, replicas))
-	} else {
-		cluster.Status.Phase = v1alpha1.PhaseCreating
-		status.SetCondition(&cluster.Status.Conditions, v1alpha1.ConditionTypeReady,
-			metav1.ConditionFalse, "NoReplicasReady", "No replicas are ready yet")
+		status.SetCondition(&cluster.Status.Conditions, v1alpha1.ConditionTypeDegraded,
+			metav1.ConditionFalse, "Healthy", "All nodes healthy")
 	}
 
 	if err := r.Status().Update(ctx, &cluster); err != nil {
@@ -174,7 +253,18 @@ func (r *NodeClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	log.Info("Reconciled NodeCluster", "phase", cluster.Status.Phase,
-		"ready", cluster.Status.ReadyReplicas, "total", replicas)
+		"ready", cluster.Status.ReadyReplicas, "healthy", cluster.Status.HealthyReplicas,
+		"total", replicas, "heightSkew", cluster.Status.HeightSkew)
+
+	// Re-poll health periodically for lux validators so status stays fresh
+	// (spec-change predicate ignores StatefulSet status-only updates).
+	if cluster.Spec.Protocol == "lux" {
+		interval := cluster.Spec.HealthPolicy.CheckIntervalSeconds
+		if interval <= 0 {
+			interval = 30
+		}
+		return ctrl.Result{RequeueAfter: time.Duration(interval) * time.Second}, nil
+	}
 
 	return ctrl.Result{}, nil
 }
@@ -186,6 +276,7 @@ func (r *NodeClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&corev1.Service{}).
 		Owns(&corev1.ConfigMap{}).
 		Owns(&policyv1.PodDisruptionBudget{}).
+		Owns(&batchv1.CronJob{}).
 		WithEventFilter(specChangePred()).
 		Complete(r)
 }
