@@ -1374,7 +1374,16 @@ func (in *ExplorerSpec) DeepCopyInto(out *ExplorerSpec) {
 		*out = new(ImageSpec)
 		**out = **in
 	}
-	in.Database.DeepCopyInto(&out.Database)
+	if in.IndexerRefs != nil {
+		in, out := &in.IndexerRefs, &out.IndexerRefs
+		*out = make([]ExplorerIndexerRef, len(*in))
+		copy(*out, *in)
+	}
+	if in.Branding != nil {
+		in, out := &in.Branding, &out.Branding
+		*out = new(ExplorerBranding)
+		**out = **in
+	}
 	if in.Ingress != nil {
 		in, out := &in.Ingress, &out.Ingress
 		*out = new(IngressSpec)
@@ -1385,6 +1394,32 @@ func (in *ExplorerSpec) DeepCopyInto(out *ExplorerSpec) {
 		*out = new(ResourceRequirements)
 		(*in).DeepCopyInto(*out)
 	}
+}
+
+func (in *ExplorerIndexerRef) DeepCopyInto(out *ExplorerIndexerRef) {
+	*out = *in
+}
+
+func (in *ExplorerIndexerRef) DeepCopy() *ExplorerIndexerRef {
+	if in == nil {
+		return nil
+	}
+	out := new(ExplorerIndexerRef)
+	in.DeepCopyInto(out)
+	return out
+}
+
+func (in *ExplorerBranding) DeepCopyInto(out *ExplorerBranding) {
+	*out = *in
+}
+
+func (in *ExplorerBranding) DeepCopy() *ExplorerBranding {
+	if in == nil {
+		return nil
+	}
+	out := new(ExplorerBranding)
+	in.DeepCopyInto(out)
+	return out
 }
 
 func (in *ExplorerSpec) DeepCopy() *ExplorerSpec {
