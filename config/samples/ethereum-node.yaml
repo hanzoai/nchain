@@ -10,7 +10,7 @@ spec:
   role: archive
   image:
     repository: ghcr.io/hanzoai/reth
-    tag: latest
+    tag: v1.0.0
   ports:
     rpc: 8545
     p2p: 30303

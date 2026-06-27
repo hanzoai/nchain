@@ -93,7 +93,7 @@ spec:
       spec:
         backendImage:
           repository: ghcr.io/luxfi/blockscout-lux
-          tag: latest
+          tag: v1.0.0
         chainRef: lux-mainnet-c-chain
         database:
           type: postgresql
