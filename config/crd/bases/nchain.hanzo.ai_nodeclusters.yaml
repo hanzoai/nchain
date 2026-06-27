@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.20.1
+    controller-gen.kubebuilder.io/version: v0.18.0
   name: nodeclusters.nchain.hanzo.ai
 spec:
   group: nchain.hanzo.ai
@@ -583,6 +583,23 @@ spec:
                       IP.
                     type: boolean
                 type: object
+              perPodService:
+                description: |-
+                  PerPodService configures per-pod LoadBalancer Services so each node has a
+                  stable external IP for P2P identity.
+                properties:
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      Annotations are applied to each per-pod LoadBalancer Service
+                      (e.g. cloud-provider load-balancer configuration).
+                    type: object
+                  enabled:
+                    description: Enabled controls whether per-pod LoadBalancer Services
+                      are created.
+                    type: boolean
+                type: object
               ports:
                 description: Ports configuration.
                 properties:
@@ -656,6 +673,61 @@ spec:
                 format: int32
                 minimum: 1
                 type: integer
+              replication:
+                description: |-
+                  Replication configures the node's native streaming replication (REPLICATE_*
+                  env), the preferred ongoing snapshot mechanism. Full snapshots plus
+                  continuous incrementals are streamed to an object store and restored on boot.
+                properties:
+                  ageIdentitySecret:
+                    description: AgeIdentitySecret is a Secret holding REPLICATE_AGE_IDENTITY
+                      for restore.
+                    type: string
+                  ageRecipient:
+                    description: AgeRecipient (an age public key) enables client-side
+                      encryption of snapshots.
+                    type: string
+                  credentialsSecret:
+                    description: CredentialsSecret is a Secret holding REPLICATE_S3_ACCESS_KEY
+                      / _SECRET_KEY.
+                    type: string
+                  enabled:
+                    description: Enabled controls whether streaming replication is
+                      active.
+                    type: boolean
+                  incrementalIntervalSeconds:
+                    description: IncrementalIntervalSeconds between incrementals.
+                      Defaults to 5.
+                    format: int64
+                    type: integer
+                  s3Bucket:
+                    description: S3Bucket holds replication objects. Defaults to "replicate".
+                    type: string
+                  s3Endpoint:
+                    description: S3Endpoint is the S3-compatible object-store endpoint.
+                    type: string
+                  s3Path:
+                    description: S3Path is the key prefix; defaults to the node's
+                      db path.
+                    type: string
+                  s3Region:
+                    description: S3Region is the object-store region.
+                    type: string
+                  s3UseSsl:
+                    description: S3UseSSL enables TLS to the object store.
+                    type: boolean
+                  snapshotIntervalSeconds:
+                    description: SnapshotIntervalSeconds between full snapshots. Defaults
+                      to 3600.
+                    format: int64
+                    type: integer
+                  sourceNodeIndex:
+                    description: |-
+                      SourceNodeIndex, when set, restricts the backup loop to that ordinal;
+                      every node still restores on boot.
+                    format: int32
+                    type: integer
+                type: object
               resources:
                 description: Resources (CPU/memory) for the node container.
                 properties:
@@ -679,6 +751,54 @@ spec:
                     description: Requests describes the minimum amount of compute
                       resources required.
                     type: object
+                type: object
+              rlpImport:
+                description: RLPImport configures a one-time C-chain RLP import for
+                  fast bootstrap.
+                properties:
+                  baseURL:
+                    description: BaseURL is the location the RLP file(s) are downloaded
+                      from.
+                    type: string
+                  cChainID:
+                    description: CChainID is the C-chain blockchain ID whose data
+                      is cleared before import.
+                    type: string
+                  enabled:
+                    description: Enabled controls whether the RLP import init container
+                      runs.
+                    type: boolean
+                  filename:
+                    description: Filename is the RLP file name (e.g. "lux-mainnet-96369.rlp").
+                    type: string
+                  minHeight:
+                    default: 1
+                    description: MinHeight skips the import when the C-chain is already
+                      at or above this height.
+                    format: int64
+                    minimum: 0
+                    type: integer
+                  multiPart:
+                    description: |-
+                      MultiPart downloads BaseURL/<basename>.part.<suffix> for each Parts entry
+                      and concatenates them into Filename before import.
+                    type: boolean
+                  parts:
+                    description: Parts lists the part suffixes (e.g. "aa","ab") for
+                      multi-part downloads.
+                    items:
+                      type: string
+                    type: array
+                  timeoutSeconds:
+                    default: 7200
+                    description: TimeoutSeconds is the maximum time allowed for the
+                      import.
+                    format: int64
+                    minimum: 1
+                    type: integer
+                required:
+                - baseURL
+                - filename
                 type: object
               role:
                 default: validator
@@ -750,11 +870,17 @@ spec:
                 - sourceType
                 type: object
               snapshotSchedule:
-                description: SnapshotSchedule configures automated periodic backups.
+                description: |-
+                  SnapshotSchedule configures operator-driven periodic backups (CronJob)
+                  uploaded to an object store, for backup/DR and as a seed-restore source.
                 properties:
                   enabled:
                     description: Enabled controls whether snapshotting is active.
                     type: boolean
+                  prefix:
+                    description: Prefix is the object-store key prefix for snapshots.
+                      Defaults to the cluster name.
+                    type: string
                   retentionCount:
                     default: 5
                     description: RetentionCount is the number of snapshots to retain.
@@ -773,6 +899,13 @@ spec:
                   schedule:
                     description: Schedule is a cron expression for snapshot frequency.
                     type: string
+                  sourceNodeIndex:
+                    default: 0
+                    description: SourceNodeIndex is the StatefulSet ordinal whose
+                      data is snapshotted.
+                    format: int32
+                    minimum: 0
+                    type: integer
                 required:
                 - schedule
                 type: object
@@ -951,6 +1084,79 @@ spec:
                 description: CurrentReplicas is the total number of running node pods.
                 format: int32
                 type: integer
+              degradedReasons:
+                description: DegradedReasons lists why the cluster is degraded (empty
+                  when healthy).
+                items:
+                  type: string
+                type: array
+              externalIPs:
+                additionalProperties:
+                  type: string
+                description: |-
+                  ExternalIPs maps pod name to the external IP discovered from its per-pod
+                  LoadBalancer Service.
+                type: object
+              healthyReplicas:
+                description: HealthyReplicas is the number of nodes that passed their
+                  health check.
+                format: int32
+                type: integer
+              heightSkew:
+                description: |-
+                  HeightSkew is the P-chain block-height difference between the highest and
+                  lowest node (0 when all nodes agree).
+                format: int64
+                type: integer
+              lastSnapshotTime:
+                description: LastSnapshotTime is when the most recent scheduled snapshot
+                  ran.
+                format: date-time
+                type: string
+              nodes:
+                description: Nodes reports per-node health and sync state.
+                items:
+                  description: |-
+                    NodeStatus reports per-node health and sync state polled from the node's
+                    health and info APIs (/ext/health, /ext/info, /ext/bc/P, /ext/bc/C).
+                  properties:
+                    bootstrapped:
+                      description: Bootstrapped indicates whether all tracked chains
+                        finished bootstrapping.
+                      type: boolean
+                    cChainHeight:
+                      description: CChainHeight is the contract-chain block height
+                        (eth_blockNumber).
+                      format: int64
+                      type: integer
+                    connectedPeers:
+                      description: ConnectedPeers is the number of peers this node
+                        is connected to.
+                      format: int32
+                      type: integer
+                    externalIP:
+                      description: ExternalIP is the node's external IP, discovered
+                        from its LoadBalancer Service.
+                      type: string
+                    healthy:
+                      description: Healthy indicates whether the node passed its health
+                        check.
+                      type: boolean
+                    name:
+                      description: Name is the pod name of the node.
+                      type: string
+                    nodeID:
+                      description: NodeID is the node's cryptographic identity (info.getNodeID).
+                      type: string
+                    pChainHeight:
+                      description: PChainHeight is the platform-chain block height
+                        (platform.getHeight).
+                      format: int64
+                      type: integer
+                  required:
+                  - name
+                  type: object
+                type: array
               observedGeneration:
                 description: ObservedGeneration is the most recent generation observed
                   by the controller.
@@ -968,6 +1174,10 @@ spec:
                 type: string
               readyReplicas:
                 description: ReadyReplicas is the number of nodes that are ready.
+                format: int32
+                type: integer
+              totalPeers:
+                description: TotalPeers is the sum of connected peers across all nodes.
                 format: int32
                 type: integer
             type: object

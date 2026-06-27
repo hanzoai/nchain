@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.20.1
+    controller-gen.kubebuilder.io/version: v0.18.0
   name: explorers.nchain.hanzo.ai
 spec:
   group: nchain.hanzo.ai
@@ -23,9 +23,12 @@ spec:
     - jsonPath: .status.phase
       name: Phase
       type: string
-    - jsonPath: .status.backendReady
-      name: Backend
-      type: boolean
+    - jsonPath: .status.url
+      name: URL
+      type: string
+    - jsonPath: .status.readyReplicas
+      name: Ready
+      type: integer
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
@@ -34,7 +37,7 @@ spec:
       openAPIV3Schema:
         description: |-
           Explorer is the Schema for the explorers API.
-          It deploys a block explorer UI and API for a specific Chain.
+          It deploys a block explorer UI for one or more Chains via their Indexers.
         properties:
           apiVersion:
             description: |-
@@ -54,11 +57,18 @@ spec:
           metadata:
             type: object
           spec:
-            description: ExplorerSpec defines the desired state of a block explorer.
+            description: |-
+              ExplorerSpec defines the desired state of a block explorer.
+
+              The explorer is a stateless web UI (e.g. ghcr.io/luxfi/explore) that reads
+              chain data from one or more Indexers over their graph/indexer HTTP API. It
+              owns no database: indexers persist data in SQLite with native streaming
+              replication, so the explorer never provisions Postgres/Redis.
             properties:
               backendImage:
-                description: BackendImage is the explorer backend container image
-                  (e.g., blockscout API).
+                description: |-
+                  BackendImage is the explorer application container image
+                  (e.g. ghcr.io/luxfi/explore).
                 properties:
                   pullPolicy:
                     default: IfNotPresent
@@ -78,77 +88,28 @@ spec:
                 required:
                 - repository
                 type: object
-              chainRef:
-                description: ChainRef is the name of the Chain to explore.
-                type: string
-              database:
-                description: Database configures the explorer's database.
+              branding:
+                description: Branding customizes the explorer UI (network name, logo,
+                  primary color).
                 properties:
-                  credentialsSecret:
-                    description: CredentialsSecret references a Secret containing
-                      database credentials.
+                  logoUrl:
+                    description: LogoURL is an optional URL to the network logo.
                     type: string
-                  image:
-                    description: Image is the database container image (ignored for
-                      sqlite).
-                    properties:
-                      pullPolicy:
-                        default: IfNotPresent
-                        description: PullPolicy defines when to pull the image.
-                        enum:
-                        - Always
-                        - IfNotPresent
-                        - Never
-                        type: string
-                      repository:
-                        description: Repository is the container image repository.
-                        type: string
-                      tag:
-                        default: latest
-                        description: Tag is the container image tag.
-                        type: string
-                    required:
-                    - repository
-                    type: object
-                  storage:
-                    description: Storage configures persistent storage for the database.
-                    properties:
-                      retentionPolicy:
-                        allOf:
-                        - enum:
-                          - Retain
-                          - Delete
-                        - enum:
-                          - Retain
-                          - Delete
-                        default: Retain
-                        description: |-
-                          RetentionPolicy determines whether the PVC is retained or deleted
-                          when the parent resource is removed.
-                        type: string
-                      size:
-                        anyOf:
-                        - type: integer
-                        - type: string
-                        description: Size is the requested storage capacity.
-                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                        x-kubernetes-int-or-string: true
-                      storageClassName:
-                        default: do-block-storage
-                        description: StorageClassName specifies the Kubernetes StorageClass
-                          to use.
-                        type: string
-                    required:
-                    - size
-                    type: object
-                  type:
-                    default: postgresql
-                    description: Type selects the database engine.
-                    enum:
-                    - postgresql
-                    - sqlite
+                  networkName:
+                    description: NetworkName is the network name displayed in the
+                      explorer UI.
                     type: string
+                  primaryColor:
+                    description: PrimaryColor is an optional hex primary color for
+                      the UI.
+                    type: string
+                required:
+                - networkName
                 type: object
+              chainRef:
+                description: ChainRef is the name of the primary Chain this explorer
+                  surfaces.
+                type: string
               frontendImage:
                 description: FrontendImage is the optional separate UI container image.
                 properties:
@@ -170,9 +131,37 @@ spec:
                 required:
                 - repository
                 type: object
-              indexerRef:
-                description: IndexerRef is the optional name of an Indexer dependency.
-                type: string
+              indexerRefs:
+                description: |-
+                  IndexerRefs lists the per-chain indexers this explorer surfaces. Each ref
+                  is wired into the explorer as CHAIN_{i}_NAME / CHAIN_{i}_INDEXER, with the
+                  default ref driving NETWORK_ID and the explorer's read API host.
+                items:
+                  description: ExplorerIndexerRef references a chain's Indexer for
+                    display in the explorer.
+                  properties:
+                    color:
+                      description: Color is an optional hex color for the chain in
+                        the UI.
+                      type: string
+                    default:
+                      description: |-
+                        Default marks this chain as the one shown by default. The first ref is
+                        used when none is marked default.
+                      type: boolean
+                    displayName:
+                      description: DisplayName is the chain's human-readable name
+                        shown in the explorer UI.
+                      type: string
+                    indexerName:
+                      description: IndexerName is the name of the Indexer (same namespace)
+                        to source data from.
+                      type: string
+                  required:
+                  - displayName
+                  - indexerName
+                  type: object
+                type: array
               ingress:
                 description: Ingress configures external access to the explorer.
                 properties:
@@ -315,6 +304,14 @@ spec:
                 - Running
                 - Degraded
                 - Deleting
+                type: string
+              readyReplicas:
+                description: ReadyReplicas is the number of ready explorer replicas.
+                format: int32
+                type: integer
+              url:
+                description: URL is the public URL of the explorer, derived from the
+                  ingress host.
                 type: string
             type: object
         type: object

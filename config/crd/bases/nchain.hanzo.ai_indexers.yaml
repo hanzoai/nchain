@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.20.1
+    controller-gen.kubebuilder.io/version: v0.18.0
   name: indexers.nchain.hanzo.ai
 spec:
   group: nchain.hanzo.ai
@@ -63,6 +63,14 @@ spec:
               chainRef:
                 description: ChainRef is the name of the Chain to index.
                 type: string
+              contractVerification:
+                default: true
+                description: ContractVerification enables contract source verification.
+                type: boolean
+              defiIndexing:
+                description: DefiIndexing enables DeFi protocol indexing (AMM, lending,
+                  staking).
+                type: boolean
               image:
                 description: Image for the indexer container.
                 properties:
@@ -115,16 +123,80 @@ spec:
                     description: TLS enables TLS termination on the Ingress.
                     type: boolean
                 type: object
+              nftIndexing:
+                description: NFTIndexing enables NFT indexing.
+                type: boolean
               nodeClusterRef:
                 description: NodeClusterRef is the name of the NodeCluster to connect
                   to for chain data.
                 type: string
+              pollInterval:
+                default: 2
+                description: PollInterval is the block polling interval in seconds.
+                format: int32
+                minimum: 1
+                type: integer
+              port:
+                default: 8091
+                description: |-
+                  Port is the HTTP API port the indexer serves. The canonical
+                  ghcr.io/luxfi/indexer image listens on 8091.
+                format: int32
+                maximum: 65535
+                minimum: 1
+                type: integer
               replicas:
                 default: 1
                 description: Replicas is the number of indexer instances.
                 format: int32
                 minimum: 1
                 type: integer
+              replication:
+                description: |-
+                  Replication configures native streaming replication of the embedded
+                  SQLite store to object storage for high availability and fast restore.
+                properties:
+                  ageIdentitySecret:
+                    description: AgeIdentitySecret is a Secret holding the age identity
+                      for restore.
+                    type: string
+                  ageRecipient:
+                    description: AgeRecipient (age public key) enables client-side
+                      snapshot encryption.
+                    type: string
+                  credentialsSecret:
+                    description: CredentialsSecret is a Secret with REPLICATE_S3_ACCESS_KEY
+                      / _SECRET_KEY.
+                    type: string
+                  enabled:
+                    description: Enabled toggles replication.
+                    type: boolean
+                  incrementalIntervalSeconds:
+                    description: IncrementalIntervalSeconds between incrementals.
+                      Defaults to 5.
+                    format: int64
+                    type: integer
+                  s3Bucket:
+                    description: S3Bucket holds replication objects. Defaults to "replicate".
+                    type: string
+                  s3Endpoint:
+                    description: S3Endpoint is the S3-compatible object-store endpoint.
+                    type: string
+                  s3Path:
+                    description: S3Path is the key prefix for replication objects.
+                    type: string
+                  s3Region:
+                    description: S3Region is the object-store region.
+                    type: string
+                  s3UseSsl:
+                    description: S3UseSSL enables TLS to the object store.
+                    type: boolean
+                  snapshotIntervalSeconds:
+                    description: SnapshotIntervalSeconds between full snapshots. Defaults
+                      to 3600.
+                    format: int64
+                    type: integer
+                type: object
               resources:
                 description: Resources (CPU/memory) for the indexer container.
                 properties:
@@ -148,6 +220,35 @@ spec:
                     description: Requests describes the minimum amount of compute
                       resources required.
                     type: object
+                type: object
+              rpcEndpoint:
+                description: |-
+                  RPCEndpoint overrides the auto-discovered chain JSON-RPC endpoint.
+                  When empty it is derived from the referenced NodeCluster headless service.
+                type: string
+              seedRestore:
+                description: |-
+                  SeedRestore restores the embedded store from an object-store snapshot on
+                  first boot via a marker-gated init container.
+                properties:
+                  enabled:
+                    description: Enabled toggles seed restoration.
+                    type: boolean
+                  markerPath:
+                    description: MarkerPath tracks completion. Defaults to /data/.seeded.
+                    type: string
+                  objectStoreUrl:
+                    description: ObjectStoreURL is the snapshot tarball URL when SourceType=ObjectStore.
+                    type: string
+                  restorePolicy:
+                    description: 'RestorePolicy controls when to restore: IfNotSeeded
+                      (default) or Always.'
+                    type: string
+                  sourceType:
+                    description: |-
+                      SourceType selects the restore mechanism. Only "ObjectStore" is handled
+                      at the init-container layer.
+                    type: string
                 type: object
               snapshots:
                 description: Snapshots configures S3-based snapshots for the indexer
@@ -203,6 +304,15 @@ spec:
                 required:
                 - size
                 type: object
+              traceEnabled:
+                default: true
+                description: TraceEnabled enables internal transaction tracing.
+                type: boolean
+              wsEndpoint:
+                description: |-
+                  WSEndpoint overrides the auto-discovered chain WebSocket endpoint.
+                  When empty it is derived from the referenced NodeCluster headless service.
+                type: string
             required:
             - chainRef
             - image
@@ -211,6 +321,15 @@ spec:
           status:
             description: IndexerStatus defines the observed state of Indexer.
             properties:
+              apiEndpoint:
+                description: APIEndpoint is the in-cluster URL of the indexer HTTP
+                  API.
+                type: string
+              chainHeight:
+                description: ChainHeight is the latest block height reported by the
+                  chain RPC.
+                format: int64
+                type: integer
               conditions:
                 description: Conditions represent the latest observations of the indexer's
                   state.
@@ -269,6 +388,10 @@ spec:
                   - type
                   type: object
                 type: array
+              databaseReady:
+                description: DatabaseReady indicates whether the indexer's embedded
+                  store is ready.
+                type: boolean
               indexedHeight:
                 description: IndexedHeight is the latest indexed block height.
                 format: int64

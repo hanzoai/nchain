@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.20.1
+    controller-gen.kubebuilder.io/version: v0.18.0
   name: gateways.nchain.hanzo.ai
 spec:
   group: nchain.hanzo.ai
@@ -29,6 +29,9 @@ spec:
     - jsonPath: .status.activeRoutes
       name: Routes
       type: integer
+    - jsonPath: .status.externalEndpoint
+      name: Endpoint
+      type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
@@ -61,13 +64,39 @@ spec:
             description: GatewaySpec defines the desired state of an RPC/API gateway.
             properties:
               autoRoutes:
-                description: AutoRoutes automatically discovers and routes all chains
-                  in the referenced NodeCluster.
+                description: |-
+                  AutoRoutes automatically discovers and routes all chains in the referenced NodeCluster.
+                  For the lux protocol this queries the cluster's P-chain (platform.getBlockchains)
+                  and generates a route per non-primary subnet chain.
                 type: boolean
+              cors:
+                description: |-
+                  CORS configures cross-origin resource sharing for all gateway endpoints.
+                  When unset, sensible defaults are applied (origins "*", methods GET/POST/OPTIONS).
+                properties:
+                  allowedHeaders:
+                    description: AllowedHeaders lists permitted request headers. Defaults
+                      to ["Content-Type","Authorization"].
+                    items:
+                      type: string
+                    type: array
+                  allowedMethods:
+                    description: AllowedMethods lists permitted HTTP methods. Defaults
+                      to ["GET","POST","OPTIONS"].
+                    items:
+                      type: string
+                    type: array
+                  allowedOrigins:
+                    description: AllowedOrigins lists permitted CORS origins. Defaults
+                      to ["*"].
+                    items:
+                      type: string
+                    type: array
+                type: object
               image:
                 description: |-
                   Image for the gateway container.
-                  Defaults to ghcr.io/hanzoai/gateway:2.14.1 (KrakenD-based).
+                  Defaults to ghcr.io/hanzoai/gateway:latest (KrakenD-based).
                 properties:
                   pullPolicy:
                     default: IfNotPresent
@@ -87,6 +116,11 @@ spec:
                 required:
                 - repository
                 type: object
+              indexerRefs:
+                description: IndexerRefs lists Indexer names to expose under /api/indexer/{ref}.
+                items:
+                  type: string
+                type: array
               ingress:
                 description: Ingress configures external access to the gateway.
                 properties:
@@ -123,7 +157,9 @@ spec:
                   traffic to.
                 type: string
               rateLimits:
-                description: RateLimits configures global rate limiting.
+                description: |-
+                  RateLimits configures rate limiting applied to RPC endpoints and the
+                  gateway as a whole (KrakenD qos/ratelimit).
                 properties:
                   clientMaxRate:
                     description: ClientMaxRate is the per-client rate limit.
@@ -222,9 +258,16 @@ spec:
             description: GatewayStatus defines the observed state of Gateway.
             properties:
               activeRoutes:
-                description: ActiveRoutes is the number of routes currently configured.
+                description: ActiveRoutes is the number of routes (gateway endpoints)
+                  currently configured.
                 format: int32
                 type: integer
+              chainRoutes:
+                additionalProperties:
+                  type: string
+                description: ChainRoutes maps auto-discovered chain names to their
+                  blockchain IDs.
+                type: object
               conditions:
                 description: Conditions represent the latest observations of the gateway's
                   state.
@@ -283,6 +326,11 @@ spec:
                   - type
                   type: object
                 type: array
+              externalEndpoint:
+                description: |-
+                  ExternalEndpoint is the externally reachable URL of the gateway, derived
+                  from the configured ingress host when available.
+                type: string
               observedGeneration:
                 description: ObservedGeneration is the most recent generation observed
                   by the controller.

@@ -252,7 +252,7 @@ func (r *ExplorerReconciler) buildExplorerEnv(ctx context.Context, explorer *v1a
 	}
 
 	// API host is the default indexer's graph/indexer endpoint.
-	apiHost := fmt.Sprintf("indexer-c-indexer.%s.svc:4000", ns)
+	apiHost := indexerEndpoint("indexer-c", ns)
 	if defaultRef != nil {
 		apiHost = indexerEndpoint(defaultRef.IndexerName, ns)
 	}
@@ -308,7 +308,7 @@ func (r *ExplorerReconciler) indexerChainID(ctx context.Context, ns, indexerName
 // indexerEndpoint returns the in-cluster host:port of an indexer's graph/indexer
 // HTTP API, matching the operator's indexer service naming convention.
 func indexerEndpoint(indexerName, ns string) string {
-	return fmt.Sprintf("%s-indexer.%s.svc:4000", indexerName, ns)
+	return fmt.Sprintf("%s.%s.svc:%d", indexerName, ns, indexerPortDefault)
 }
 
 func (r *ExplorerReconciler) SetupWithManager(mgr ctrl.Manager) error {

@@ -58,14 +58,14 @@ func TestBuildExplorerEnv(t *testing.T) {
 	got := envMap(r.buildExplorerEnv(context.Background(), explorer))
 	want := map[string]string{
 		"CHAIN_0_NAME":             "Lux C-Chain",
-		"CHAIN_0_INDEXER":          "http://lux-c-indexer.lux-mainnet.svc:4000",
+		"CHAIN_0_INDEXER":          "http://lux-c.lux-mainnet.svc:8091",
 		"CHAIN_1_NAME":             "Hanzo",
-		"CHAIN_1_INDEXER":          "http://hanzo-indexer.lux-mainnet.svc:4000",
+		"CHAIN_1_INDEXER":          "http://hanzo.lux-mainnet.svc:8091",
 		"CHAIN_COUNT":              "2",
 		"NEXT_PUBLIC_APP_HOST":     "explore.lux.network",
 		"NEXT_PUBLIC_NETWORK_NAME": "Lux",
 		"NEXT_PUBLIC_NETWORK_ID":   "36963",
-		"NEXT_PUBLIC_API_HOST":     "http://hanzo-indexer.lux-mainnet.svc:4000",
+		"NEXT_PUBLIC_API_HOST":     "http://hanzo.lux-mainnet.svc:8091",
 		"NEXT_PUBLIC_APP_PROTOCOL": "https",
 		"NEXT_PUBLIC_API_PROTOCOL": "http",
 		"NETWORK_NAME":             "Lux",
