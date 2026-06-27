@@ -1629,10 +1629,20 @@ func (in *GatewaySpec) DeepCopyInto(out *GatewaySpec) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
+	if in.IndexerRefs != nil {
+		in, out := &in.IndexerRefs, &out.IndexerRefs
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	if in.RateLimits != nil {
 		in, out := &in.RateLimits, &out.RateLimits
 		*out = new(RateLimitConfig)
 		**out = **in
+	}
+	if in.CORS != nil {
+		in, out := &in.CORS, &out.CORS
+		*out = new(GatewayCORS)
+		(*in).DeepCopyInto(*out)
 	}
 	if in.Ingress != nil {
 		in, out := &in.Ingress, &out.Ingress
@@ -1646,6 +1656,34 @@ func (in *GatewaySpec) DeepCopyInto(out *GatewaySpec) {
 	}
 }
 
+func (in *GatewayCORS) DeepCopyInto(out *GatewayCORS) {
+	*out = *in
+	if in.AllowedOrigins != nil {
+		in, out := &in.AllowedOrigins, &out.AllowedOrigins
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
+	if in.AllowedMethods != nil {
+		in, out := &in.AllowedMethods, &out.AllowedMethods
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
+	if in.AllowedHeaders != nil {
+		in, out := &in.AllowedHeaders, &out.AllowedHeaders
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
+}
+
+func (in *GatewayCORS) DeepCopy() *GatewayCORS {
+	if in == nil {
+		return nil
+	}
+	out := new(GatewayCORS)
+	in.DeepCopyInto(out)
+	return out
+}
+
 func (in *GatewaySpec) DeepCopy() *GatewaySpec {
 	if in == nil {
 		return nil
@@ -1657,6 +1695,13 @@ func (in *GatewaySpec) DeepCopy() *GatewaySpec {
 
 func (in *GatewayStatus) DeepCopyInto(out *GatewayStatus) {
 	*out = *in
+	if in.ChainRoutes != nil {
+		in, out := &in.ChainRoutes, &out.ChainRoutes
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
 		*out = make([]metav1.Condition, len(*in))
