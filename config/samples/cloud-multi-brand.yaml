@@ -12,17 +12,23 @@ spec:
         org: HANZO
         clientID: hanzo-web3
     - name: lux
-      domain: web3.lux.network
+      domain: lux.cloud
       iam:
         url: https://lux.id
         org: LUX
         clientID: lux-web3
     - name: zoo
-      domain: web3.zoo.ngo
+      domain: zoo.cloud
       iam:
         url: https://zoolabs.id
         org: ZOO
         clientID: zoo-web3
+    - name: bootnode
+      domain: bootno.de
+      iam:
+        url: https://hanzo.id
+        org: HANZO
+        clientID: hanzo-bootnode
     - name: pars
       domain: web3.pars.id
       iam:
