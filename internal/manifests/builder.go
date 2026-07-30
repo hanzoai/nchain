@@ -1141,12 +1141,35 @@ func BuildCloudAPIIngress(cloud *v1alpha1.Cloud) *networkingv1.Ingress {
 	}
 
 	var rules []networkingv1.IngressRule
-	var allHosts []string
+	var tls []networkingv1.IngressTLS
+	tlsEnabled := cloud.Spec.Ingress != nil && cloud.Spec.Ingress.TLS
 
 	for _, brand := range cloud.Spec.Brands {
 		apiHost := "api." + brand.Domain
 		wsHost := "ws." + brand.Domain
-		allHosts = append(allHosts, apiHost, wsHost)
+
+		// ONE CERTIFICATE PER BRAND, never one bundle for all of them.
+		//
+		// ACME issues a SAN certificate only when EVERY name on it validates. A single
+		// bundle therefore fails completely whenever one brand cannot answer its HTTP-01
+		// challenge here — which is the normal case for a brand fronted by a CDN that
+		// terminates TLS at its own edge and proxies to a different origin.
+		//
+		// Observed on the web3-platform Cloud: bootno.de, api.bootno.de and ws.bootno.de
+		// are CDN-fronted and 404 the challenge, so `web3-platform-api-tls` sat stuck on
+		// `Fields on existing CertificateRequest resource not up to date` past its
+		// 2026-07-09 renewal time and was heading for expiry on 2026-08-08 — taking the
+		// eight healthy web3.* hosts, which all validate fine, down with it.
+		//
+		// Per-brand entries make failure brand-local: a brand that cannot validate loses
+		// only its own certificate. This also matches BuildCloudWebIngress below, which
+		// has always been per-brand.
+		if tlsEnabled {
+			tls = append(tls, networkingv1.IngressTLS{
+				Hosts:      []string{apiHost, wsHost},
+				SecretName: name + "-" + brand.Name + "-tls",
+			})
+		}
 
 		for _, host := range []string{apiHost, wsHost} {
 			rules = append(rules, networkingv1.IngressRule{
@@ -1169,13 +1192,6 @@ func BuildCloudAPIIngress(cloud *v1alpha1.Cloud) *networkingv1.Ingress {
 		}
 	}
 
-	var tls []networkingv1.IngressTLS
-	if cloud.Spec.Ingress != nil && cloud.Spec.Ingress.TLS {
-		tls = append(tls, networkingv1.IngressTLS{
-			Hosts:      allHosts,
-			SecretName: name + "-tls",
-		})
-	}
 
 	ing := &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
