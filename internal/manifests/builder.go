@@ -612,10 +612,7 @@ func BuildIngress(name, ns string, spec *v1alpha1.IngressSpec, serviceName strin
 
 	var tls []networkingv1.IngressTLS
 	if spec.TLS && len(spec.Hosts) > 0 {
-		tls = append(tls, networkingv1.IngressTLS{
-			Hosts:      spec.Hosts,
-			SecretName: name + "-tls",
-		})
+		tls = tlsPerRegisteredDomain(name, spec.Hosts)
 	}
 
 	ing := &networkingv1.Ingress{
@@ -1292,4 +1289,55 @@ func derefInt32Ptr(p *int32, def int32) int32 {
 		return *p
 	}
 	return def
+}
+
+// tlsPerRegisteredDomain groups hosts into one IngressTLS entry per registered
+// domain, so each domain gets its own certificate.
+//
+// ACME issues a SAN certificate only when EVERY name on it validates. Putting
+// hosts from different domains on one certificate therefore couples them: a
+// single name that cannot answer its challenge — typically one fronted by a CDN
+// that terminates TLS at its own edge — blocks issuance and renewal for all the
+// others.
+//
+// That is not theoretical. `web3-platform-api-tls` bundled ten hosts across five
+// domains; bootno.de could not validate, and the certificate sat stuck past its
+// renewal time heading for expiry, taking eight healthy hosts with it. Grouping
+// keeps a failure inside the domain that caused it.
+//
+// The common single-domain case is unchanged: one entry, secret "<name>-tls".
+func tlsPerRegisteredDomain(name string, hosts []string) []networkingv1.IngressTLS {
+	byDomain := map[string][]string{}
+	var order []string
+	for _, h := range hosts {
+		d := registeredDomain(h)
+		if _, seen := byDomain[d]; !seen {
+			order = append(order, d)
+		}
+		byDomain[d] = append(byDomain[d], h)
+	}
+
+	tls := make([]networkingv1.IngressTLS, 0, len(order))
+	for _, d := range order {
+		secret := name + "-tls"
+		if len(order) > 1 {
+			// Only qualify the name when it must be unique, so existing
+			// single-domain Ingresses keep the secret they already reference.
+			secret = name + "-" + strings.ReplaceAll(d, ".", "-") + "-tls"
+		}
+		tls = append(tls, networkingv1.IngressTLS{Hosts: byDomain[d], SecretName: secret})
+	}
+	return tls
+}
+
+// registeredDomain returns the last two labels of a hostname ("api.web3.lux.network"
+// -> "lux.network"). Deliberately simple: it groups certificates, and a
+// multi-label public suffix such as "co.uk" only means two of those domains share
+// one certificate — the pre-existing behaviour, never a broken one.
+func registeredDomain(host string) string {
+	parts := strings.Split(strings.TrimSuffix(host, "."), ".")
+	if len(parts) < 2 {
+		return host
+	}
+	return strings.Join(parts[len(parts)-2:], ".")
 }

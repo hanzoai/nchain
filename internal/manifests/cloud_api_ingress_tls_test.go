@@ -51,3 +51,43 @@ func TestBuildCloudAPIIngress_NoTLSWhenDisabled(t *testing.T) {
 		t.Errorf("TLS disabled must emit no entries, got %d", got)
 	}
 }
+
+// A host that cannot answer its ACME challenge must not block certificates for
+// hosts on other domains, so BuildIngress groups TLS by registered domain.
+func TestBuildIngress_TLSGroupedByDomain(t *testing.T) {
+	spec := &v1alpha1.IngressSpec{
+		Enabled: true,
+		TLS:     true,
+		Hosts:   []string{"api.web3.hanzo.ai", "ws.web3.hanzo.ai", "api.bootno.de", "ws.bootno.de"},
+	}
+	ing := BuildIngress("gw", "ns", spec, "gw", 80, nil)
+
+	if got := len(ing.Spec.TLS); got != 2 {
+		t.Fatalf("want 2 TLS entries (hanzo.ai + bootno.de), got %d", got)
+	}
+	if got, want := ing.Spec.TLS[0].SecretName, "gw-hanzo-ai-tls"; got != want {
+		t.Errorf("secret = %q, want %q", got, want)
+	}
+	if got, want := len(ing.Spec.TLS[1].Hosts), 2; got != want {
+		t.Errorf("bootno.de hosts = %d, want %d", got, want)
+	}
+	if got := len(ing.Spec.Rules); got != 4 {
+		t.Errorf("routing changed: %d rules, want 4", got)
+	}
+}
+
+// The overwhelmingly common case is one domain; that must keep its existing
+// secret name so live Ingresses are not forced to re-issue.
+func TestBuildIngress_SingleDomainKeepsSecretName(t *testing.T) {
+	spec := &v1alpha1.IngressSpec{
+		Enabled: true, TLS: true,
+		Hosts: []string{"api.lux.network", "ws.lux.network"},
+	}
+	ing := BuildIngress("gw", "ns", spec, "gw", 80, nil)
+	if len(ing.Spec.TLS) != 1 {
+		t.Fatalf("want 1 entry, got %d", len(ing.Spec.TLS))
+	}
+	if got, want := ing.Spec.TLS[0].SecretName, "gw-tls"; got != want {
+		t.Errorf("secret = %q, want unchanged %q", got, want)
+	}
+}
