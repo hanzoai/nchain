@@ -21,8 +21,8 @@ const (
 	luxStakingPort    = int32(9651)
 	luxMetricsPort    = int32(9090)
 	luxBinaryPath     = "/luxd/build/luxd"
-	luxHealthPath     = "/ext/health"
-	luxInfoPath       = "/ext/info"
+	luxHealthPath     = "/v1/health"
+	luxInfoPath       = "/v1/info"
 	luxStartupScript  = "startup.sh"
 )
 

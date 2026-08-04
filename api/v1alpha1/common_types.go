@@ -480,7 +480,7 @@ type RLPImportSpec struct {
 }
 
 // NodeStatus reports per-node health and sync state polled from the node's
-// health and info APIs (/ext/health, /ext/info, /ext/bc/P, /ext/bc/C).
+// health and info APIs (/v1/health, /v1/info, /v1/bc/P, /v1/bc/C).
 type NodeStatus struct {
 	// Name is the pod name of the node.
 	Name string `json:"name"`

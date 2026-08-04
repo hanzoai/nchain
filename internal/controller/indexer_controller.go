@@ -437,7 +437,7 @@ echo "seed-restore: complete"
 // resolveEndpoints returns the chain RPC and WS endpoints, using explicit spec
 // overrides when set, otherwise deriving them from the referenced NodeCluster's
 // headless service DNS (pod-0). Ported from the upstream operator's endpoint
-// discovery: http://{nc}-0.{nc}-headless.{ns}.svc:{port}/ext/bc/{chain}/rpc.
+// discovery: http://{nc}-0.{nc}-headless.{ns}.svc:{port}/v1/bc/{chain}/rpc.
 func (r *IndexerReconciler) resolveEndpoints(ctx context.Context, indexer *v1alpha1.Indexer) (string, string) {
 	rpc := indexer.Spec.RPCEndpoint
 	ws := indexer.Spec.WSEndpoint
@@ -460,10 +460,10 @@ func (r *IndexerReconciler) resolveEndpoints(ctx context.Context, indexer *v1alp
 
 	host := fmt.Sprintf("%s-0.%s-headless.%s.svc", net, net, indexer.Namespace)
 	if rpc == "" {
-		rpc = fmt.Sprintf("http://%s:%d/ext/bc/%s/rpc", host, port, chain)
+		rpc = fmt.Sprintf("http://%s:%d/v1/bc/%s/rpc", host, port, chain)
 	}
 	if ws == "" {
-		ws = fmt.Sprintf("ws://%s:%d/ext/bc/%s/ws", host, port, chain)
+		ws = fmt.Sprintf("ws://%s:%d/v1/bc/%s/ws", host, port, chain)
 	}
 	return rpc, ws
 }

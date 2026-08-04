@@ -210,7 +210,7 @@ func (r *GatewayReconciler) apply(ctx context.Context, owner *v1alpha1.Gateway, 
 // discoverSubnetChains queries a node's P-chain (platform.getBlockchains) and
 // returns non-primary subnet chains. It is best-effort: any failure yields nil.
 func (r *GatewayReconciler) discoverSubnetChains(ctx context.Context, ns, clusterRef string, rpcPort int32) []chainRoute {
-	url := fmt.Sprintf("http://%s-headless.%s.svc:%d/ext/bc/P", clusterRef, ns, rpcPort)
+	url := fmt.Sprintf("http://%s-headless.%s.svc:%d/v1/bc/P", clusterRef, ns, rpcPort)
 	payload := []byte(`{"jsonrpc":"2.0","id":1,"method":"platform.getBlockchains","params":{}}`)
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
@@ -275,16 +275,16 @@ func buildGatewayConfig(gw *v1alpha1.Gateway, protocol, rpcBackend string, subne
 	if gw.Spec.AutoRoutes && rpcBackend != "" {
 		if protocol == "lux" {
 			endpoints = append(endpoints,
-				gatewayEndpoint("/ext/bc/C/rpc", "/ext/bc/C/rpc", rpcBackend, "POST", endpointRateLimit(gw.Spec.RateLimits)),
-				gatewayEndpoint("/ext/bc/C/ws", "/ext/bc/C/ws", rpcBackend, "", nil),
-				gatewayEndpoint("/ext/bc/X", "/ext/bc/X", rpcBackend, "POST", nil),
-				gatewayEndpoint("/ext/bc/P", "/ext/bc/P", rpcBackend, "POST", nil),
-				gatewayEndpoint("/ext/info", "/ext/info", rpcBackend, "POST", nil),
-				gatewayEndpoint("/ext/health", "/ext/health", rpcBackend, "", nil),
+				gatewayEndpoint("/v1/bc/C/rpc", "/v1/bc/C/rpc", rpcBackend, "POST", endpointRateLimit(gw.Spec.RateLimits)),
+				gatewayEndpoint("/v1/bc/C/ws", "/v1/bc/C/ws", rpcBackend, "", nil),
+				gatewayEndpoint("/v1/bc/X", "/v1/bc/X", rpcBackend, "POST", nil),
+				gatewayEndpoint("/v1/bc/P", "/v1/bc/P", rpcBackend, "POST", nil),
+				gatewayEndpoint("/v1/info", "/v1/info", rpcBackend, "POST", nil),
+				gatewayEndpoint("/v1/health", "/v1/health", rpcBackend, "", nil),
 			)
 			for _, c := range subnetChains {
-				rpcPath := fmt.Sprintf("/ext/bc/%s/rpc", c.id)
-				wsPath := fmt.Sprintf("/ext/bc/%s/ws", c.id)
+				rpcPath := fmt.Sprintf("/v1/bc/%s/rpc", c.id)
+				wsPath := fmt.Sprintf("/v1/bc/%s/ws", c.id)
 				endpoints = append(endpoints,
 					gatewayEndpoint(rpcPath, rpcPath, rpcBackend, "POST", endpointRateLimit(gw.Spec.RateLimits)),
 					gatewayEndpoint(wsPath, wsPath, rpcBackend, "", nil),

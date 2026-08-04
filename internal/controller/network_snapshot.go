@@ -16,7 +16,7 @@ package controller
 //     starts, avoiding the "bootstrapped at height 0 with 0 peers" race.
 //   - buildRLPImportInitContainer: one-time C-chain RLP import (admin_importChain)
 //     for fast bootstrap.
-//   - pollNode / pollHealth: per-node /ext/health polling -> per-node and
+//   - pollNode / pollHealth: per-node /v1/health polling -> per-node and
 //     aggregate status (pChainHeight, peers, bootstrapped, healthy, heightSkew).
 
 import (
@@ -296,14 +296,14 @@ echo "rlp-import: starting temporary node for import"
   --sybil-protection-enabled=false &
 NODE_PID=$!
 i=0
-until curl -sf -m 2 "http://127.0.0.1:$PORT/ext/health" >/dev/null 2>&1; do
+until curl -sf -m 2 "http://127.0.0.1:$PORT/v1/health" >/dev/null 2>&1; do
   i=$((i+1))
   if [ "$i" -gt 150 ]; then echo "rlp-import: node did not become healthy" >&2; kill "$NODE_PID" 2>/dev/null || true; exit 1; fi
   sleep 2
 done
 HEX=$(curl -fsS -m 5 -X POST -H 'content-type:application/json' \
   --data '{"jsonrpc":"2.0","id":1,"method":"eth_blockNumber","params":[]}' \
-  "http://127.0.0.1:$PORT/ext/bc/C/rpc" | sed -n 's/.*"result":"\(0x[0-9a-fA-F]*\)".*/\1/p')
+  "http://127.0.0.1:$PORT/v1/bc/C/rpc" | sed -n 's/.*"result":"\(0x[0-9a-fA-F]*\)".*/\1/p')
 HEIGHT=$(printf '%%d' "$HEX" 2>/dev/null || echo 0)
 if [ "${HEIGHT:-0}" -ge %[8]d ]; then
   echo "rlp-import: C-chain at $HEIGHT >= %[8]d, skipping import"
@@ -311,7 +311,7 @@ else
   echo "rlp-import: importing $RLP (timeout %[9]ds)"
   curl -fsS -m %[9]d -X POST -H 'content-type:application/json' \
     --data "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"admin_importChain\",\"params\":[\"$RLP\"]}" \
-    "http://127.0.0.1:$PORT/ext/bc/C/rpc" || echo "rlp-import: import RPC returned error"
+    "http://127.0.0.1:$PORT/v1/bc/C/rpc" || echo "rlp-import: import RPC returned error"
 fi
 kill "$NODE_PID" 2>/dev/null || true
 wait "$NODE_PID" 2>/dev/null || true
@@ -381,9 +381,9 @@ TS=$(date -u +%Y%m%dT%H%M%SZ)
 KEY="${S3_PREFIX}/snap-${TS}.tar.zst"
 echo "snapshot: requesting admin.snapshot from ${SOURCE_HOST}"
 curl -fsS -m 60 -X POST --data '{"jsonrpc":"2.0","id":1,"method":"admin.snapshot","params":{}}' \
-  -H 'content-type:application/json' "http://${SOURCE_HOST}/ext/admin" >/dev/null
+  -H 'content-type:application/json' "http://${SOURCE_HOST}/v1/admin" >/dev/null
 mc alias set store "${S3_ENDPOINT}" "${S3_ACCESS_KEY:-}" "${S3_SECRET_KEY:-}" >/dev/null 2>&1 || true
-curl -fsS -m 600 "http://${SOURCE_HOST}/ext/admin/snapshot.tar.zst" | mc pipe "store/${S3_BUCKET}/${KEY}"
+curl -fsS -m 600 "http://${SOURCE_HOST}/v1/admin/snapshot.tar.zst" | mc pipe "store/${S3_BUCKET}/${KEY}"
 echo "snapshot: uploaded ${KEY}"
 mc ls "store/${S3_BUCKET}/${S3_PREFIX}/" | awk '{print $NF}' | sort | head -n -"${MAX_RETAINED}" \
   | while read -r old; do mc rm "store/${S3_BUCKET}/${S3_PREFIX}/${old}" || true; done
@@ -467,7 +467,7 @@ func pollNode(ctx context.Context, hc *http.Client, podIP string, rpcPort int32)
 
 	// Health: a node is bootstrapped when checks.bootstrapped.message is an empty
 	// array; healthy when bootstrapped with peers (falls back to the overall flag).
-	if res, err := nodeRPC(ctx, hc, base+"/ext/health", "health.health", map[string]any{}); err == nil {
+	if res, err := nodeRPC(ctx, hc, base+"/v1/health", "health.health", map[string]any{}); err == nil {
 		var h struct {
 			Healthy *bool `json:"healthy"`
 			Checks  map[string]struct {
@@ -489,7 +489,7 @@ func pollNode(ctx context.Context, hc *http.Client, podIP string, rpcPort int32)
 	}
 
 	// P-chain height (platform.getHeight returns a decimal string).
-	if res, err := nodeRPC(ctx, hc, base+"/ext/bc/P", "platform.getHeight", map[string]any{}); err == nil {
+	if res, err := nodeRPC(ctx, hc, base+"/v1/bc/P", "platform.getHeight", map[string]any{}); err == nil {
 		var p struct {
 			Height string `json:"height"`
 		}
@@ -501,7 +501,7 @@ func pollNode(ctx context.Context, hc *http.Client, podIP string, rpcPort int32)
 	}
 
 	// C-chain height (eth_blockNumber returns a hex string).
-	if res, err := nodeRPC(ctx, hc, base+"/ext/bc/C/rpc", "eth_blockNumber", []any{}); err == nil {
+	if res, err := nodeRPC(ctx, hc, base+"/v1/bc/C/rpc", "eth_blockNumber", []any{}); err == nil {
 		var hexStr string
 		if json.Unmarshal(res, &hexStr) == nil {
 			if h, err := strconv.ParseInt(strings.TrimPrefix(hexStr, "0x"), 16, 64); err == nil {
@@ -511,7 +511,7 @@ func pollNode(ctx context.Context, hc *http.Client, podIP string, rpcPort int32)
 	}
 
 	// Node ID.
-	if res, err := nodeRPC(ctx, hc, base+"/ext/info", "info.getNodeID", map[string]any{}); err == nil {
+	if res, err := nodeRPC(ctx, hc, base+"/v1/info", "info.getNodeID", map[string]any{}); err == nil {
 		var n struct {
 			NodeID string `json:"nodeID"`
 		}
@@ -521,7 +521,7 @@ func pollNode(ctx context.Context, hc *http.Client, podIP string, rpcPort int32)
 	}
 
 	// Peer count (info.peers overrides the health-derived count when present).
-	if res, err := nodeRPC(ctx, hc, base+"/ext/info", "info.peers", map[string]any{}); err == nil {
+	if res, err := nodeRPC(ctx, hc, base+"/v1/info", "info.peers", map[string]any{}); err == nil {
 		var pr struct {
 			NumPeers string            `json:"numPeers"`
 			Peers    []json.RawMessage `json:"peers"`
