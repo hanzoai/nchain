@@ -35,7 +35,7 @@ spec:
         keys:
           secretName: lux-mainnet-staking
           kms:
-            hostAPI: https://kms.lux.network/api
+            hostAPI: https://kms.lux.cloud/api
             projectSlug: lux-infra
             envSlug: mainnet
             secretsPath: /staking
