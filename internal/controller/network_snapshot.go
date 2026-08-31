@@ -303,7 +303,7 @@ until curl -sf -m 2 "http://127.0.0.1:$PORT/v1/health" >/dev/null 2>&1; do
 done
 HEX=$(curl -fsS -m 5 -X POST -H 'content-type:application/json' \
   --data '{"jsonrpc":"2.0","id":1,"method":"eth_blockNumber","params":[]}' \
-  "http://127.0.0.1:$PORT/v1/bc/C/rpc" | sed -n 's/.*"result":"\(0x[0-9a-fA-F]*\)".*/\1/p')
+  "http://127.0.0.1:$PORT/v1/chain/C/rpc" | sed -n 's/.*"result":"\(0x[0-9a-fA-F]*\)".*/\1/p')
 HEIGHT=$(printf '%%d' "$HEX" 2>/dev/null || echo 0)
 if [ "${HEIGHT:-0}" -ge %[8]d ]; then
   echo "rlp-import: C-chain at $HEIGHT >= %[8]d, skipping import"
@@ -311,7 +311,7 @@ else
   echo "rlp-import: importing $RLP (timeout %[9]ds)"
   curl -fsS -m %[9]d -X POST -H 'content-type:application/json' \
     --data "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"admin_importChain\",\"params\":[\"$RLP\"]}" \
-    "http://127.0.0.1:$PORT/v1/bc/C/rpc" || echo "rlp-import: import RPC returned error"
+    "http://127.0.0.1:$PORT/v1/chain/C/rpc" || echo "rlp-import: import RPC returned error"
 fi
 kill "$NODE_PID" 2>/dev/null || true
 wait "$NODE_PID" 2>/dev/null || true
@@ -489,7 +489,7 @@ func pollNode(ctx context.Context, hc *http.Client, podIP string, rpcPort int32)
 	}
 
 	// P-chain height (platform.getHeight returns a decimal string).
-	if res, err := nodeRPC(ctx, hc, base+"/v1/bc/P", "platform.getHeight", map[string]any{}); err == nil {
+	if res, err := nodeRPC(ctx, hc, base+"/v1/chain/P", "platform.getHeight", map[string]any{}); err == nil {
 		var p struct {
 			Height string `json:"height"`
 		}
@@ -501,7 +501,7 @@ func pollNode(ctx context.Context, hc *http.Client, podIP string, rpcPort int32)
 	}
 
 	// C-chain height (eth_blockNumber returns a hex string).
-	if res, err := nodeRPC(ctx, hc, base+"/v1/bc/C/rpc", "eth_blockNumber", []any{}); err == nil {
+	if res, err := nodeRPC(ctx, hc, base+"/v1/chain/C/rpc", "eth_blockNumber", []any{}); err == nil {
 		var hexStr string
 		if json.Unmarshal(res, &hexStr) == nil {
 			if h, err := strconv.ParseInt(strings.TrimPrefix(hexStr, "0x"), 16, 64); err == nil {

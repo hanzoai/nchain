@@ -48,8 +48,8 @@ func TestBuildGatewayConfigLuxAutoRoutes(t *testing.T) {
 		t.Errorf("version = %v, want 3", root["version"])
 	}
 	for _, must := range []string{
-		"/v1/bc/C/rpc", "/v1/bc/C/ws", "/v1/bc/X", "/v1/bc/P", "/v1/info", "/v1/health",
-		"/v1/bc/abc123/rpc", "/v1/bc/abc123/ws", "/v1/bc/def456/rpc", "/v1/bc/def456/ws",
+		"/v1/chain/C/rpc", "/v1/chain/C/ws", "/v1/chain/X", "/v1/chain/P", "/v1/info", "/v1/health",
+		"/v1/chain/abc123/rpc", "/v1/chain/abc123/ws", "/v1/chain/def456/rpc", "/v1/chain/def456/ws",
 	} {
 		if !strings.Contains(cfg, `"endpoint": "`+must+`"`) {
 			t.Errorf("config missing endpoint %q", must)
