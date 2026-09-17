@@ -97,12 +97,10 @@ func (r *ChainReconciler) buildGenesisConfigMap(chain *v1alpha1.Chain) *corev1.C
 	}
 
 	return &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-genesis", chain.Name),
-			Namespace: chain.Namespace,
-			Labels:    labels,
-		},
-		Data: data,
+		Name:      fmt.Sprintf("%s-genesis", chain.Name),
+		Namespace: chain.Namespace,
+		Labels:    labels,
+		Data:      data,
 	}
 }
 

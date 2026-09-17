@@ -5,15 +5,13 @@ import (
 	"strings"
 	"testing"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"github.com/hanzoai/nchain/api/v1alpha1"
 )
 
 func newGateway(spec v1alpha1.GatewaySpec) *v1alpha1.Gateway {
 	return &v1alpha1.Gateway{
-		ObjectMeta: metav1.ObjectMeta{Name: "api", Namespace: "lux"},
-		Spec:       spec,
+		Name: "api", Namespace: "lux",
+		Spec: spec,
 	}
 }
 

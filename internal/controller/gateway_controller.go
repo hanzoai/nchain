@@ -116,12 +116,10 @@ func (r *GatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// Render the hanzoai/gateway config and reconcile it as a ConfigMap.
 	configJSON, routeCount := buildGatewayConfig(&gw, protocol, rpcBackend, subnetChains)
 	desiredCM := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      gw.Name + "-config",
-			Namespace: gw.Namespace,
-			Labels:    manifests.StandardLabels(gw.Name, "gateway-config", "", ""),
-		},
-		Data: map[string]string{gatewayConfigKey: configJSON},
+		Name:      gw.Name + "-config",
+		Namespace: gw.Namespace,
+		Labels:    manifests.StandardLabels(gw.Name, "gateway-config", "", ""),
+		Data:      map[string]string{gatewayConfigKey: configJSON},
 	}
 	if err := r.apply(ctx, &gw, desiredCM, &corev1.ConfigMap{}); err != nil {
 		return ctrl.Result{}, err
@@ -136,11 +134,9 @@ func (r *GatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// Service (ClusterIP). External access and TLS termination are handled by
 	// hanzoai/ingress, never by the gateway itself.
 	desiredSvc := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      gw.Name,
-			Namespace: gw.Namespace,
-			Labels:    labels,
-		},
+		Name:      gw.Name,
+		Namespace: gw.Namespace,
+		Labels:    labels,
 		Spec: corev1.ServiceSpec{
 			Type:     corev1.ServiceTypeClusterIP,
 			Selector: selectorLbls,
@@ -501,11 +497,9 @@ func buildGatewayDeployment(gw *v1alpha1.Gateway, labels, selectorLbls map[strin
 	terminationGrace := int64(30)
 
 	return &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      gw.Name,
-			Namespace: gw.Namespace,
-			Labels:    labels,
-		},
+		Name:      gw.Name,
+		Namespace: gw.Namespace,
+		Labels:    labels,
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
 			Selector: &metav1.LabelSelector{MatchLabels: selectorLbls},
@@ -522,10 +516,8 @@ func buildGatewayDeployment(gw *v1alpha1.Gateway, labels, selectorLbls map[strin
 					Containers: []corev1.Container{container},
 					Volumes: []corev1.Volume{{
 						Name: "config",
-						VolumeSource: corev1.VolumeSource{
-							ConfigMap: &corev1.ConfigMapVolumeSource{
-								LocalObjectReference: corev1.LocalObjectReference{Name: gw.Name + "-config"},
-							},
+						ConfigMap: &corev1.ConfigMapVolumeSource{
+							Name: gw.Name + "-config",
 						},
 					}},
 					TerminationGracePeriodSeconds: &terminationGrace,
@@ -537,9 +529,7 @@ func buildGatewayDeployment(gw *v1alpha1.Gateway, labels, selectorLbls map[strin
 
 func httpProbe(path string, port, initialDelay, period int32) *corev1.Probe {
 	return &corev1.Probe{
-		ProbeHandler: corev1.ProbeHandler{
-			HTTPGet: &corev1.HTTPGetAction{Path: path, Port: intstr.FromInt32(port)},
-		},
+		HTTPGet:             &corev1.HTTPGetAction{Path: path, Port: intstr.FromInt32(port)},
 		InitialDelaySeconds: initialDelay,
 		PeriodSeconds:       period,
 		TimeoutSeconds:      5,

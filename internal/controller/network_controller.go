@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"maps"
 
 	"github.com/go-logr/logr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -42,12 +43,10 @@ func (r *NetworkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// Reconcile child NodeClusters.
 	for _, named := range network.Spec.Clusters {
 		child := &v1alpha1.NodeCluster{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      fmt.Sprintf("%s-%s", network.Name, named.Name),
-				Namespace: network.Namespace,
-				Labels:    mergeWithNetworkLabels(&network, named.Name, "nodecluster"),
-			},
-			Spec: named.Spec,
+			Name:      fmt.Sprintf("%s-%s", network.Name, named.Name),
+			Namespace: network.Namespace,
+			Labels:    mergeWithNetworkLabels(&network, named.Name, "nodecluster"),
+			Spec:      named.Spec,
 		}
 		// Inherit protocol and networkID if not set.
 		if child.Spec.Protocol == "" {
@@ -64,12 +63,10 @@ func (r *NetworkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// Reconcile child Chains.
 	for _, named := range network.Spec.Chains {
 		child := &v1alpha1.Chain{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      fmt.Sprintf("%s-%s", network.Name, named.Name),
-				Namespace: network.Namespace,
-				Labels:    mergeWithNetworkLabels(&network, named.Name, "chain"),
-			},
-			Spec: named.Spec,
+			Name:      fmt.Sprintf("%s-%s", network.Name, named.Name),
+			Namespace: network.Namespace,
+			Labels:    mergeWithNetworkLabels(&network, named.Name, "chain"),
+			Spec:      named.Spec,
 		}
 		if child.Spec.Protocol == "" {
 			child.Spec.Protocol = network.Spec.Protocol
@@ -82,12 +79,10 @@ func (r *NetworkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// Reconcile child Indexers.
 	for _, named := range network.Spec.Indexers {
 		child := &v1alpha1.Indexer{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      fmt.Sprintf("%s-%s", network.Name, named.Name),
-				Namespace: network.Namespace,
-				Labels:    mergeWithNetworkLabels(&network, named.Name, "indexer"),
-			},
-			Spec: named.Spec,
+			Name:      fmt.Sprintf("%s-%s", network.Name, named.Name),
+			Namespace: network.Namespace,
+			Labels:    mergeWithNetworkLabels(&network, named.Name, "indexer"),
+			Spec:      named.Spec,
 		}
 		if err := r.reconcileChild(ctx, &network, child); err != nil {
 			return ctrl.Result{}, err
@@ -97,12 +92,10 @@ func (r *NetworkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// Reconcile child Explorers.
 	for _, named := range network.Spec.Explorers {
 		child := &v1alpha1.Explorer{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      fmt.Sprintf("%s-%s", network.Name, named.Name),
-				Namespace: network.Namespace,
-				Labels:    mergeWithNetworkLabels(&network, named.Name, "explorer"),
-			},
-			Spec: named.Spec,
+			Name:      fmt.Sprintf("%s-%s", network.Name, named.Name),
+			Namespace: network.Namespace,
+			Labels:    mergeWithNetworkLabels(&network, named.Name, "explorer"),
+			Spec:      named.Spec,
 		}
 		if err := r.reconcileChild(ctx, &network, child); err != nil {
 			return ctrl.Result{}, err
@@ -112,12 +105,10 @@ func (r *NetworkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// Reconcile child Bridges.
 	for _, named := range network.Spec.Bridges {
 		child := &v1alpha1.Bridge{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      fmt.Sprintf("%s-%s", network.Name, named.Name),
-				Namespace: network.Namespace,
-				Labels:    mergeWithNetworkLabels(&network, named.Name, "bridge"),
-			},
-			Spec: named.Spec,
+			Name:      fmt.Sprintf("%s-%s", network.Name, named.Name),
+			Namespace: network.Namespace,
+			Labels:    mergeWithNetworkLabels(&network, named.Name, "bridge"),
+			Spec:      named.Spec,
 		}
 		if err := r.reconcileChild(ctx, &network, child); err != nil {
 			return ctrl.Result{}, err
@@ -127,12 +118,10 @@ func (r *NetworkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// Reconcile child Gateways.
 	for _, named := range network.Spec.Gateways {
 		child := &v1alpha1.Gateway{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      fmt.Sprintf("%s-%s", network.Name, named.Name),
-				Namespace: network.Namespace,
-				Labels:    mergeWithNetworkLabels(&network, named.Name, "gateway"),
-			},
-			Spec: named.Spec,
+			Name:      fmt.Sprintf("%s-%s", network.Name, named.Name),
+			Namespace: network.Namespace,
+			Labels:    mergeWithNetworkLabels(&network, named.Name, "gateway"),
+			Spec:      named.Spec,
 		}
 		if err := r.reconcileChild(ctx, &network, child); err != nil {
 			return ctrl.Result{}, err
@@ -142,11 +131,9 @@ func (r *NetworkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// Reconcile Cloud child CR if spec.cloud is set.
 	if network.Spec.Cloud != nil && network.Spec.Cloud.Enabled {
 		child := &v1alpha1.Cloud{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      network.Name + "-cloud",
-				Namespace: network.Namespace,
-				Labels:    mergeWithNetworkLabels(&network, "cloud", "cloud"),
-			},
+			Name:      network.Name + "-cloud",
+			Namespace: network.Namespace,
+			Labels:    mergeWithNetworkLabels(&network, "cloud", "cloud"),
 		}
 		// Map inline NetworkCloudSpec to standalone CloudSpec.
 		if network.Spec.Cloud.APIImage != nil {
@@ -236,9 +223,7 @@ func (r *NetworkReconciler) reconcileChild(ctx context.Context, network *v1alpha
 	if existingLabels == nil {
 		existingLabels = make(map[string]string)
 	}
-	for k, v := range child.GetLabels() {
-		existingLabels[k] = v
-	}
+	maps.Copy(existingLabels, child.GetLabels())
 	existing.SetLabels(existingLabels)
 
 	return r.Update(ctx, existing)
@@ -254,9 +239,7 @@ func mergeWithNetworkLabels(network *v1alpha1.Network, name, component string) m
 		"app.kubernetes.io/managed-by": "nchain-operator",
 		"nchain.hanzo.ai/network":      network.Name,
 	}
-	for k, v := range network.Spec.Labels {
-		labels[k] = v
-	}
+	maps.Copy(labels, network.Spec.Labels)
 	return labels
 }
 

@@ -12,18 +12,18 @@ import (
 )
 
 const (
-	luxDefaultImage   = "ghcr.io/luxfi/node:latest"
-	luxDataDir        = "/data"
-	luxStakingDir     = "/staking"
-	luxPluginDir      = "/plugins"
-	luxConfigDir      = "/configs"
-	luxHTTPPort       = int32(9650)
-	luxStakingPort    = int32(9651)
-	luxMetricsPort    = int32(9090)
-	luxBinaryPath     = "/luxd/build/luxd"
-	luxHealthPath     = "/v1/health"
-	luxInfoPath       = "/v1/info"
-	luxStartupScript  = "startup.sh"
+	luxDefaultImage  = "ghcr.io/luxfi/node:latest"
+	luxDataDir       = "/data"
+	luxStakingDir    = "/staking"
+	luxPluginDir     = "/plugins"
+	luxConfigDir     = "/configs"
+	luxHTTPPort      = int32(9650)
+	luxStakingPort   = int32(9651)
+	luxMetricsPort   = int32(9090)
+	luxBinaryPath    = "/luxd/build/luxd"
+	luxHealthPath    = "/v1/health"
+	luxInfoPath      = "/v1/info"
+	luxStartupScript = "startup.sh"
 )
 
 // LuxDriver implements the Driver interface for the Lux blockchain protocol.
@@ -177,11 +177,9 @@ func (d *LuxDriver) BuildVolumes(spec *v1alpha1.NodeClusterSpec) []corev1.Volume
 	if spec.Keys != nil && spec.Keys.SecretName != "" {
 		volumes = append(volumes, corev1.Volume{
 			Name: "staking-keys",
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName:  spec.Keys.SecretName,
-					DefaultMode: int32Ptr(0400),
-				},
+			Secret: &corev1.SecretVolumeSource{
+				SecretName:  spec.Keys.SecretName,
+				DefaultMode: new(int32(0400)),
 			},
 		})
 	}
@@ -189,10 +187,8 @@ func (d *LuxDriver) BuildVolumes(spec *v1alpha1.NodeClusterSpec) []corev1.Volume
 	// Plugin emptyDir for init container to populate.
 	if spec.Init != nil && len(spec.Init.Plugins) > 0 {
 		volumes = append(volumes, corev1.Volume{
-			Name: "plugins",
-			VolumeSource: corev1.VolumeSource{
-				EmptyDir: &corev1.EmptyDirVolumeSource{},
-			},
+			Name:     "plugins",
+			EmptyDir: &corev1.EmptyDirVolumeSource{},
 		})
 	}
 
@@ -201,11 +197,9 @@ func (d *LuxDriver) BuildVolumes(spec *v1alpha1.NodeClusterSpec) []corev1.Volume
 		mode := int32(0755)
 		volumes = append(volumes, corev1.Volume{
 			Name: "config",
-			VolumeSource: corev1.VolumeSource{
-				ConfigMap: &corev1.ConfigMapVolumeSource{
-					LocalObjectReference: corev1.LocalObjectReference{Name: ""},
-					DefaultMode:          &mode,
-				},
+			ConfigMap: &corev1.ConfigMapVolumeSource{
+				Name:        "",
+				DefaultMode: &mode,
 			},
 		})
 	}
@@ -489,28 +483,28 @@ func (d *LuxDriver) RecommendedResources(role string) (corev1.ResourceList, core
 	switch role {
 	case "archive":
 		return corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("4"),
-				corev1.ResourceMemory: resource.MustParse("8Gi"),
-			}, corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("8"),
-				corev1.ResourceMemory: resource.MustParse("16Gi"),
-			}
+			corev1.ResourceCPU:    resource.MustParse("4"),
+			corev1.ResourceMemory: resource.MustParse("8Gi"),
+		}, corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("8"),
+			corev1.ResourceMemory: resource.MustParse("16Gi"),
+		}
 	case "fullnode":
 		return corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("2"),
-				corev1.ResourceMemory: resource.MustParse("4Gi"),
-			}, corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("4"),
-				corev1.ResourceMemory: resource.MustParse("8Gi"),
-			}
+			corev1.ResourceCPU:    resource.MustParse("2"),
+			corev1.ResourceMemory: resource.MustParse("4Gi"),
+		}, corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("4"),
+			corev1.ResourceMemory: resource.MustParse("8Gi"),
+		}
 	default: // validator
 		return corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("2"),
-				corev1.ResourceMemory: resource.MustParse("4Gi"),
-			}, corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("4"),
-				corev1.ResourceMemory: resource.MustParse("8Gi"),
-			}
+			corev1.ResourceCPU:    resource.MustParse("2"),
+			corev1.ResourceMemory: resource.MustParse("4Gi"),
+		}, corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("4"),
+			corev1.ResourceMemory: resource.MustParse("8Gi"),
+		}
 	}
 }
 
@@ -524,5 +518,3 @@ func (d *LuxDriver) RecommendedStorage(role string) string {
 		return "100Gi"
 	}
 }
-
-func int32Ptr(v int32) *int32 { return &v }

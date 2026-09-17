@@ -1,5 +1,7 @@
 package manifests
 
+import maps0 "maps"
+
 const (
 	// Standard Kubernetes recommended labels.
 	labelName      = "app.kubernetes.io/name"
@@ -46,9 +48,7 @@ func SelectorLabels(name string) map[string]string {
 func MergeLabels(maps ...map[string]string) map[string]string {
 	out := make(map[string]string)
 	for _, m := range maps {
-		for k, v := range m {
-			out[k] = v
-		}
+		maps0.Copy(out, m)
 	}
 	return out
 }

@@ -100,18 +100,16 @@ func (r *IndexerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	if err := ctrl.SetControllerReference(&indexer, desiredDep, r.Scheme); err != nil {
 		return ctrl.Result{}, err
 	}
-	existingDep := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: desiredDep.Name, Namespace: desiredDep.Namespace}}
+	existingDep := &appsv1.Deployment{Name: desiredDep.Name, Namespace: desiredDep.Namespace}
 	if _, err := ctrl.CreateOrUpdate(ctx, r.Client, existingDep, manifests.MutateFuncFor(existingDep, desiredDep)); err != nil {
 		return ctrl.Result{}, err
 	}
 
 	// Service for the indexer API.
 	desiredSvc := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      indexer.Name,
-			Namespace: indexer.Namespace,
-			Labels:    labels,
-		},
+		Name:      indexer.Name,
+		Namespace: indexer.Namespace,
+		Labels:    labels,
 		Spec: corev1.ServiceSpec{
 			Type:     corev1.ServiceTypeClusterIP,
 			Selector: selectorLbls,
@@ -123,7 +121,7 @@ func (r *IndexerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	if err := ctrl.SetControllerReference(&indexer, desiredSvc, r.Scheme); err != nil {
 		return ctrl.Result{}, err
 	}
-	existingSvc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: desiredSvc.Name, Namespace: desiredSvc.Namespace}}
+	existingSvc := &corev1.Service{Name: desiredSvc.Name, Namespace: desiredSvc.Namespace}
 	if _, err := ctrl.CreateOrUpdate(ctx, r.Client, existingSvc, manifests.MutateFuncFor(existingSvc, desiredSvc)); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -135,7 +133,7 @@ func (r *IndexerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		if err := ctrl.SetControllerReference(&indexer, desiredIng, r.Scheme); err != nil {
 			return ctrl.Result{}, err
 		}
-		existingIng := &networkingv1.Ingress{ObjectMeta: metav1.ObjectMeta{Name: desiredIng.Name, Namespace: desiredIng.Namespace}}
+		existingIng := &networkingv1.Ingress{Name: desiredIng.Name, Namespace: desiredIng.Namespace}
 		if _, err := ctrl.CreateOrUpdate(ctx, r.Client, existingIng, manifests.MutateFuncFor(existingIng, desiredIng)); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -206,11 +204,9 @@ func buildIndexerDataPVC(indexer *v1alpha1.Indexer, name string) *corev1.Persist
 	}
 
 	return &corev1.PersistentVolumeClaim{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: indexer.Namespace,
-			Labels:    manifests.SelectorLabels(indexer.Name),
-		},
+		Name:      name,
+		Namespace: indexer.Namespace,
+		Labels:    manifests.SelectorLabels(indexer.Name),
 		Spec: corev1.PersistentVolumeClaimSpec{
 			AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
 			Resources: corev1.VolumeResourceRequirements{
@@ -252,10 +248,8 @@ func augmentIndexerDeployment(dep *appsv1.Deployment, indexer *v1alpha1.Indexer,
 	dataMount := corev1.VolumeMount{Name: indexerDataVolume, MountPath: indexerDataMount}
 	ensureVolumeMount(c, dataMount)
 	ensureVolume(pod, corev1.Volume{
-		Name: indexerDataVolume,
-		VolumeSource: corev1.VolumeSource{
-			PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: cfg.pvcName},
-		},
+		Name:                  indexerDataVolume,
+		PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: cfg.pvcName},
 	})
 
 	// CLI flags the luxfi/indexer binary reads for store path + listen address.
@@ -296,18 +290,14 @@ func augmentIndexerDeployment(dep *appsv1.Deployment, indexer *v1alpha1.Indexer,
 
 	c.Ports = []corev1.ContainerPort{{Name: "http", ContainerPort: cfg.port, Protocol: corev1.ProtocolTCP}}
 	c.ReadinessProbe = &corev1.Probe{
-		ProbeHandler: corev1.ProbeHandler{
-			HTTPGet: &corev1.HTTPGetAction{Path: "/health", Port: intstr.FromString("http")},
-		},
+		HTTPGet:             &corev1.HTTPGetAction{Path: "/health", Port: intstr.FromString("http")},
 		InitialDelaySeconds: 15,
 		PeriodSeconds:       10,
 		TimeoutSeconds:      5,
 		FailureThreshold:    3,
 	}
 	c.LivenessProbe = &corev1.Probe{
-		ProbeHandler: corev1.ProbeHandler{
-			HTTPGet: &corev1.HTTPGetAction{Path: "/health", Port: intstr.FromString("http")},
-		},
+		HTTPGet:             &corev1.HTTPGetAction{Path: "/health", Port: intstr.FromString("http")},
 		InitialDelaySeconds: 60,
 		PeriodSeconds:       30,
 		TimeoutSeconds:      10,
@@ -375,14 +365,14 @@ func indexerReplicationEnv(spec v1alpha1.IndexerReplicationSpec) ([]corev1.EnvVa
 	if spec.CredentialsSecret != "" {
 		from = append(from, corev1.EnvFromSource{
 			SecretRef: &corev1.SecretEnvSource{
-				LocalObjectReference: corev1.LocalObjectReference{Name: spec.CredentialsSecret},
+				Name: spec.CredentialsSecret,
 			},
 		})
 	}
 	if spec.AgeIdentitySecret != "" {
 		from = append(from, corev1.EnvFromSource{
 			SecretRef: &corev1.SecretEnvSource{
-				LocalObjectReference: corev1.LocalObjectReference{Name: spec.AgeIdentitySecret},
+				Name: spec.AgeIdentitySecret,
 			},
 		})
 	}

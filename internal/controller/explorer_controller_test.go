@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -31,18 +30,18 @@ func TestBuildExplorerEnv(t *testing.T) {
 
 	ns := "lux-mainnet"
 	chain := &v1alpha1.Chain{
-		ObjectMeta: metav1.ObjectMeta{Name: "hanzo-chain", Namespace: ns},
-		Spec:       v1alpha1.ChainSpec{Protocol: "lux", ChainID: "36963", NodeClusterRef: "nc"},
+		Name: "hanzo-chain", Namespace: ns,
+		Spec: v1alpha1.ChainSpec{Protocol: "lux", ChainID: "36963", NodeClusterRef: "nc"},
 	}
 	indexer := &v1alpha1.Indexer{
-		ObjectMeta: metav1.ObjectMeta{Name: "hanzo", Namespace: ns},
-		Spec:       v1alpha1.IndexerSpec{ChainRef: "hanzo-chain", NodeClusterRef: "nc"},
+		Name: "hanzo", Namespace: ns,
+		Spec: v1alpha1.IndexerSpec{ChainRef: "hanzo-chain", NodeClusterRef: "nc"},
 	}
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(chain, indexer).Build()
 	r := &ExplorerReconciler{Client: c, Scheme: scheme}
 
 	explorer := &v1alpha1.Explorer{
-		ObjectMeta: metav1.ObjectMeta{Name: "lux", Namespace: ns},
+		Name: "lux", Namespace: ns,
 		Spec: v1alpha1.ExplorerSpec{
 			BackendImage: v1alpha1.ImageSpec{Repository: "ghcr.io/luxfi/explore"},
 			ChainRef:     "hanzo-chain",
@@ -89,7 +88,7 @@ func TestBuildExplorerEnvDefaults(t *testing.T) {
 	r := &ExplorerReconciler{Client: c, Scheme: scheme}
 
 	explorer := &v1alpha1.Explorer{
-		ObjectMeta: metav1.ObjectMeta{Name: "lux", Namespace: "default"},
+		Name: "lux", Namespace: "default",
 		Spec: v1alpha1.ExplorerSpec{
 			BackendImage: v1alpha1.ImageSpec{Repository: "ghcr.io/luxfi/explore"},
 			ChainRef:     "c",

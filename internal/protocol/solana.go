@@ -11,16 +11,16 @@ import (
 )
 
 const (
-	solDefaultImage  = "ghcr.io/hanzoai/solana-validator:latest"
-	solDataDir       = "/data"
-	solLedgerDir     = "/data/ledger"
-	solAccountsDir   = "/data/accounts"
-	solKeysDir       = "/keys"
-	solRPCPort       = int32(8899)
-	solP2PPort       = int32(8001)
-	solGossipPort    = int32(8000)
-	solMetricsPort   = int32(9090)
-	solHealthPath    = "/health"
+	solDefaultImage = "ghcr.io/hanzoai/solana-validator:latest"
+	solDataDir      = "/data"
+	solLedgerDir    = "/data/ledger"
+	solAccountsDir  = "/data/accounts"
+	solKeysDir      = "/keys"
+	solRPCPort      = int32(8899)
+	solP2PPort      = int32(8001)
+	solGossipPort   = int32(8000)
+	solMetricsPort  = int32(9090)
+	solHealthPath   = "/health"
 )
 
 // SolanaDriver implements the Driver interface for the Solana blockchain protocol.
@@ -102,11 +102,9 @@ func (d *SolanaDriver) BuildVolumes(spec *v1alpha1.NodeClusterSpec) []corev1.Vol
 	if spec.Keys != nil && spec.Keys.SecretName != "" {
 		volumes = append(volumes, corev1.Volume{
 			Name: "keys",
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName:  spec.Keys.SecretName,
-					DefaultMode: int32Ptr(0400),
-				},
+			Secret: &corev1.SecretVolumeSource{
+				SecretName:  spec.Keys.SecretName,
+				DefaultMode: new(int32(0400)),
 			},
 		})
 	}
@@ -154,28 +152,28 @@ func (d *SolanaDriver) RecommendedResources(role string) (corev1.ResourceList, c
 	switch role {
 	case "fullnode":
 		return corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("16"),
-				corev1.ResourceMemory: resource.MustParse("128Gi"),
-			}, corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("24"),
-				corev1.ResourceMemory: resource.MustParse("256Gi"),
-			}
+			corev1.ResourceCPU:    resource.MustParse("16"),
+			corev1.ResourceMemory: resource.MustParse("128Gi"),
+		}, corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("24"),
+			corev1.ResourceMemory: resource.MustParse("256Gi"),
+		}
 	case "archive":
 		return corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("24"),
-				corev1.ResourceMemory: resource.MustParse("256Gi"),
-			}, corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("32"),
-				corev1.ResourceMemory: resource.MustParse("512Gi"),
-			}
+			corev1.ResourceCPU:    resource.MustParse("24"),
+			corev1.ResourceMemory: resource.MustParse("256Gi"),
+		}, corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("32"),
+			corev1.ResourceMemory: resource.MustParse("512Gi"),
+		}
 	default: // validator
 		return corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("24"),
-				corev1.ResourceMemory: resource.MustParse("256Gi"),
-			}, corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("32"),
-				corev1.ResourceMemory: resource.MustParse("512Gi"),
-			}
+			corev1.ResourceCPU:    resource.MustParse("24"),
+			corev1.ResourceMemory: resource.MustParse("256Gi"),
+		}, corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("32"),
+			corev1.ResourceMemory: resource.MustParse("512Gi"),
+		}
 	}
 }
 

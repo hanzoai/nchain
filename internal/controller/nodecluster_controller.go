@@ -183,7 +183,7 @@ func (r *NodeClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	// Per-pod LoadBalancer Services for stable external P2P IPs (validator identity).
 	if cluster.Spec.PerPodService != nil && cluster.Spec.PerPodService.Enabled {
-		for i := int32(0); i < replicas; i++ {
+		for i := range replicas {
 			svc := buildPerPodService(&cluster, i, rpcPort, p2pPort)
 			if err := r.reconcileOwned(ctx, &cluster, svc); err != nil {
 				return ctrl.Result{}, fmt.Errorf("reconciling per-pod service %d: %w", i, err)

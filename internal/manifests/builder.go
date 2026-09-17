@@ -2,6 +2,7 @@ package manifests
 
 import (
 	"fmt"
+	"maps"
 	"strconv"
 	"strings"
 
@@ -51,11 +52,9 @@ func BuildNodeClusterStatefulSet(cluster *v1alpha1.NodeCluster, driver protocol.
 		VolumeMounts: volumeMounts,
 		Ports:        buildContainerPorts(cluster, driver),
 		LivenessProbe: &corev1.Probe{
-			ProbeHandler: corev1.ProbeHandler{
-				HTTPGet: &corev1.HTTPGetAction{
-					Path: healthPath,
-					Port: intstr.FromInt32(healthPort),
-				},
+			HTTPGet: &corev1.HTTPGetAction{
+				Path: healthPath,
+				Port: intstr.FromInt32(healthPort),
 			},
 			InitialDelaySeconds: 30,
 			PeriodSeconds:       30,
@@ -63,11 +62,9 @@ func BuildNodeClusterStatefulSet(cluster *v1alpha1.NodeCluster, driver protocol.
 			FailureThreshold:    3,
 		},
 		ReadinessProbe: &corev1.Probe{
-			ProbeHandler: corev1.ProbeHandler{
-				HTTPGet: &corev1.HTTPGetAction{
-					Path: readyPath,
-					Port: intstr.FromInt32(readyPort),
-				},
+			HTTPGet: &corev1.HTTPGetAction{
+				Path: readyPath,
+				Port: intstr.FromInt32(readyPort),
 			},
 			InitialDelaySeconds: 10,
 			PeriodSeconds:       10,
@@ -117,10 +114,8 @@ func BuildNodeClusterStatefulSet(cluster *v1alpha1.NodeCluster, driver protocol.
 	var pvcTemplates []corev1.PersistentVolumeClaim
 	if cluster.Spec.Storage != nil {
 		pvcTemplates = append(pvcTemplates, corev1.PersistentVolumeClaim{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:   "data",
-				Labels: selectorLbls,
-			},
+			Name:   "data",
+			Labels: selectorLbls,
 			Spec: corev1.PersistentVolumeClaimSpec{
 				AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
 				Resources: corev1.VolumeResourceRequirements{
@@ -133,10 +128,8 @@ func BuildNodeClusterStatefulSet(cluster *v1alpha1.NodeCluster, driver protocol.
 		})
 	} else if recStorage := driver.RecommendedStorage(cluster.Spec.Role); recStorage != "" {
 		pvcTemplates = append(pvcTemplates, corev1.PersistentVolumeClaim{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:   "data",
-				Labels: selectorLbls,
-			},
+			Name:   "data",
+			Labels: selectorLbls,
 			Spec: corev1.PersistentVolumeClaimSpec{
 				AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
 				Resources: corev1.VolumeResourceRequirements{
@@ -175,12 +168,10 @@ func BuildNodeClusterStatefulSet(cluster *v1alpha1.NodeCluster, driver protocol.
 	}
 
 	return &appsv1.StatefulSet{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        cluster.Name,
-			Namespace:   cluster.Namespace,
-			Labels:      labels,
-			Annotations: cluster.Spec.Annotations,
-		},
+		Name:        cluster.Name,
+		Namespace:   cluster.Namespace,
+		Labels:      labels,
+		Annotations: cluster.Spec.Annotations,
 		Spec: appsv1.StatefulSetSpec{
 			Replicas:             cluster.Spec.Replicas,
 			ServiceName:          cluster.Name + "-headless",
@@ -214,11 +205,9 @@ func BuildNodeClusterHeadlessService(cluster *v1alpha1.NodeCluster) *corev1.Serv
 	selectorLbls := SelectorLabels(cluster.Name)
 
 	return &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cluster.Name + "-headless",
-			Namespace: cluster.Namespace,
-			Labels:    labels,
-		},
+		Name:      cluster.Name + "-headless",
+		Namespace: cluster.Namespace,
+		Labels:    labels,
 		Spec: corev1.ServiceSpec{
 			Type:      corev1.ServiceTypeClusterIP,
 			ClusterIP: "None",
@@ -234,11 +223,9 @@ func BuildNodeClusterService(cluster *v1alpha1.NodeCluster) *corev1.Service {
 	selectorLbls := SelectorLabels(cluster.Name)
 
 	return &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cluster.Name,
-			Namespace: cluster.Namespace,
-			Labels:    labels,
-		},
+		Name:      cluster.Name,
+		Namespace: cluster.Namespace,
+		Labels:    labels,
 		Spec: corev1.ServiceSpec{
 			Type:     corev1.ServiceTypeClusterIP,
 			Selector: selectorLbls,
@@ -252,12 +239,10 @@ func BuildNodeClusterConfigMap(cluster *v1alpha1.NodeCluster, driver protocol.Dr
 	labels := StandardLabels(cluster.Name, "config", cluster.Name, "")
 
 	return &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cluster.Name + "-config",
-			Namespace: cluster.Namespace,
-			Labels:    labels,
-		},
-		Data: driver.BuildConfigMap(&cluster.Spec),
+		Name:      cluster.Name + "-config",
+		Namespace: cluster.Namespace,
+		Labels:    labels,
+		Data:      driver.BuildConfigMap(&cluster.Spec),
 	}
 }
 
@@ -299,11 +284,9 @@ func BuildIndexerDeployment(indexer *v1alpha1.Indexer) *appsv1.Deployment {
 	terminationGrace := int64(30)
 
 	dep := &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      indexer.Name,
-			Namespace: indexer.Namespace,
-			Labels:    labels,
-		},
+		Name:      indexer.Name,
+		Namespace: indexer.Namespace,
+		Labels:    labels,
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
 			Selector: &metav1.LabelSelector{
@@ -350,11 +333,9 @@ func BuildExplorerDeployments(explorer *v1alpha1.Explorer) (*appsv1.Deployment, 
 	terminationGrace := int64(30)
 
 	backend := &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      explorer.Name + "-backend",
-			Namespace: explorer.Namespace,
-			Labels:    backendLabels,
-		},
+		Name:      explorer.Name + "-backend",
+		Namespace: explorer.Namespace,
+		Labels:    backendLabels,
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &one,
 			Selector: &metav1.LabelSelector{MatchLabels: backendSelector},
@@ -382,11 +363,9 @@ func BuildExplorerDeployments(explorer *v1alpha1.Explorer) (*appsv1.Deployment, 
 		}
 
 		frontend = &appsv1.Deployment{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      explorer.Name + "-frontend",
-				Namespace: explorer.Namespace,
-				Labels:    frontendLabels,
-			},
+			Name:      explorer.Name + "-frontend",
+			Namespace: explorer.Namespace,
+			Labels:    frontendLabels,
 			Spec: appsv1.DeploymentSpec{
 				Replicas: &one,
 				Selector: &metav1.LabelSelector{MatchLabels: frontendSelector},
@@ -441,11 +420,9 @@ func BuildGatewayDeployment(gw *v1alpha1.Gateway) *appsv1.Deployment {
 	terminationGrace := int64(30)
 
 	return &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      gw.Name,
-			Namespace: gw.Namespace,
-			Labels:    labels,
-		},
+		Name:      gw.Name,
+		Namespace: gw.Namespace,
+		Labels:    labels,
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
 			Selector: &metav1.LabelSelector{MatchLabels: selectorLbls},
@@ -463,10 +440,8 @@ func BuildGatewayDeployment(gw *v1alpha1.Gateway) *appsv1.Deployment {
 					Volumes: []corev1.Volume{
 						{
 							Name: "config",
-							VolumeSource: corev1.VolumeSource{
-								ConfigMap: &corev1.ConfigMapVolumeSource{
-									LocalObjectReference: corev1.LocalObjectReference{Name: gw.Name + "-config"},
-								},
+							ConfigMap: &corev1.ConfigMapVolumeSource{
+								Name: gw.Name + "-config",
 							},
 						},
 					},
@@ -485,11 +460,9 @@ func BuildGatewayConfigMap(gw *v1alpha1.Gateway) *corev1.ConfigMap {
 	config := buildKrakenDConfig(gw)
 
 	return &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      gw.Name + "-config",
-			Namespace: gw.Namespace,
-			Labels:    labels,
-		},
+		Name:      gw.Name + "-config",
+		Namespace: gw.Namespace,
+		Labels:    labels,
 		Data: map[string]string{
 			"krakend.json": config,
 		},
@@ -522,11 +495,9 @@ func BuildBridgeDeployments(bridge *v1alpha1.Bridge) (*appsv1.Deployment, *appsv
 	terminationGrace := int64(30)
 
 	server := &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      bridge.Name + "-server",
-			Namespace: bridge.Namespace,
-			Labels:    serverLabels,
-		},
+		Name:      bridge.Name + "-server",
+		Namespace: bridge.Namespace,
+		Labels:    serverLabels,
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &one,
 			Selector: &metav1.LabelSelector{MatchLabels: serverSelector},
@@ -553,11 +524,9 @@ func BuildBridgeDeployments(bridge *v1alpha1.Bridge) (*appsv1.Deployment, *appsv
 		}
 
 		ui = &appsv1.Deployment{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      bridge.Name + "-ui",
-				Namespace: bridge.Namespace,
-				Labels:    uiLabels,
-			},
+			Name:      bridge.Name + "-ui",
+			Namespace: bridge.Namespace,
+			Labels:    uiLabels,
 			Spec: appsv1.DeploymentSpec{
 				Replicas: &one,
 				Selector: &metav1.LabelSelector{MatchLabels: uiSelector},
@@ -583,25 +552,21 @@ func BuildIngress(name, ns string, spec *v1alpha1.IngressSpec, serviceName strin
 	if spec.TLS {
 		annotations["cert-manager.io/cluster-issuer"] = spec.ClusterIssuer
 	}
-	for k, v := range spec.Annotations {
-		annotations[k] = v
-	}
+	maps.Copy(annotations, spec.Annotations)
 
 	var rules []networkingv1.IngressRule
 	for _, host := range spec.Hosts {
 		rules = append(rules, networkingv1.IngressRule{
 			Host: host,
-			IngressRuleValue: networkingv1.IngressRuleValue{
-				HTTP: &networkingv1.HTTPIngressRuleValue{
-					Paths: []networkingv1.HTTPIngressPath{
-						{
-							Path:     "/",
-							PathType: &pathType,
-							Backend: networkingv1.IngressBackend{
-								Service: &networkingv1.IngressServiceBackend{
-									Name: serviceName,
-									Port: networkingv1.ServiceBackendPort{Number: servicePort},
-								},
+			HTTP: &networkingv1.HTTPIngressRuleValue{
+				Paths: []networkingv1.HTTPIngressPath{
+					{
+						Path:     "/",
+						PathType: &pathType,
+						Backend: networkingv1.IngressBackend{
+							Service: &networkingv1.IngressServiceBackend{
+								Name: serviceName,
+								Port: networkingv1.ServiceBackendPort{Number: servicePort},
 							},
 						},
 					},
@@ -616,12 +581,10 @@ func BuildIngress(name, ns string, spec *v1alpha1.IngressSpec, serviceName strin
 	}
 
 	ing := &networkingv1.Ingress{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        name,
-			Namespace:   ns,
-			Labels:      labels,
-			Annotations: annotations,
-		},
+		Name:        name,
+		Namespace:   ns,
+		Labels:      labels,
+		Annotations: annotations,
 		Spec: networkingv1.IngressSpec{
 			Rules: rules,
 			TLS:   tls,
@@ -641,11 +604,9 @@ func BuildPDB(name, ns string, selectorLabels map[string]string) *policyv1.PodDi
 	labels := StandardLabels(name, "pdb", "", "")
 
 	return &policyv1.PodDisruptionBudget{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name + "-pdb",
-			Namespace: ns,
-			Labels:    labels,
-		},
+		Name:      name + "-pdb",
+		Namespace: ns,
+		Labels:    labels,
 		Spec: policyv1.PodDisruptionBudgetSpec{
 			MinAvailable: &minAvail,
 			Selector: &metav1.LabelSelector{
@@ -717,16 +678,16 @@ func buildContainerPorts(cluster *v1alpha1.NodeCluster, driver protocol.Driver) 
 func buildKrakenDConfig(gw *v1alpha1.Gateway) string {
 	// Build a minimal KrakenD configuration. In production this would be more
 	// elaborate, but this provides the skeleton for route configuration.
-	var endpoints string
+	var endpoints strings.Builder
 	for i, route := range gw.Spec.Routes {
 		if i > 0 {
-			endpoints += ","
+			endpoints.WriteString(",")
 		}
-		endpoints += fmt.Sprintf(`{"endpoint":"%s","backend":[{"url_pattern":"%s","host":["http://%s"]}]}`,
-			route.Prefix, route.Prefix, route.Backend)
+		endpoints.WriteString(fmt.Sprintf(`{"endpoint":"%s","backend":[{"url_pattern":"%s","host":["http://%s"]}]}`,
+			route.Prefix, route.Prefix, route.Backend))
 	}
 
-	return fmt.Sprintf(`{"version":3,"name":"%s","port":8080,"endpoints":[%s]}`, gw.Name, endpoints)
+	return fmt.Sprintf(`{"version":3,"name":"%s","port":8080,"endpoints":[%s]}`, gw.Name, endpoints.String())
 }
 
 func tagOrDefault(tag string) string {
@@ -785,14 +746,14 @@ func BuildCloudAPIDeployment(cloud *v1alpha1.Cloud) *appsv1.Deployment {
 		{Name: "FEATURE_WEBHOOKS", Value: strconv.FormatBool(cloud.Spec.Features.Webhooks)},
 		{Name: "DATABASE_URL", ValueFrom: &corev1.EnvVarSource{
 			SecretKeyRef: &corev1.SecretKeySelector{
-				LocalObjectReference: corev1.LocalObjectReference{Name: cloud.Spec.Database.CredentialsSecret},
-				Key:                  "DATABASE_URL",
+				Name: cloud.Spec.Database.CredentialsSecret,
+				Key:  "DATABASE_URL",
 			},
 		}},
 		{Name: "REDIS_URL", ValueFrom: &corev1.EnvVarSource{
 			SecretKeyRef: &corev1.SecretKeySelector{
-				LocalObjectReference: corev1.LocalObjectReference{Name: cloud.Spec.Database.CredentialsSecret},
-				Key:                  "REDIS_URL",
+				Name: cloud.Spec.Database.CredentialsSecret,
+				Key:  "REDIS_URL",
 			},
 		}},
 	}
@@ -827,10 +788,8 @@ func BuildCloudAPIDeployment(cloud *v1alpha1.Cloud) *appsv1.Deployment {
 		mountPath := fmt.Sprintf("/etc/kubeconfig/%s", ct.Brand)
 		volumes = append(volumes, corev1.Volume{
 			Name: volName,
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName: ct.KubeconfigSecret,
-				},
+			Secret: &corev1.SecretVolumeSource{
+				SecretName: ct.KubeconfigSecret,
 			},
 		})
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{
@@ -854,11 +813,9 @@ func BuildCloudAPIDeployment(cloud *v1alpha1.Cloud) *appsv1.Deployment {
 			{Name: "http", ContainerPort: 8000, Protocol: corev1.ProtocolTCP},
 		},
 		LivenessProbe: &corev1.Probe{
-			ProbeHandler: corev1.ProbeHandler{
-				HTTPGet: &corev1.HTTPGetAction{
-					Path: "/health",
-					Port: intstr.FromInt32(8000),
-				},
+			HTTPGet: &corev1.HTTPGetAction{
+				Path: "/health",
+				Port: intstr.FromInt32(8000),
 			},
 			InitialDelaySeconds: 15,
 			PeriodSeconds:       20,
@@ -866,11 +823,9 @@ func BuildCloudAPIDeployment(cloud *v1alpha1.Cloud) *appsv1.Deployment {
 			FailureThreshold:    3,
 		},
 		ReadinessProbe: &corev1.Probe{
-			ProbeHandler: corev1.ProbeHandler{
-				HTTPGet: &corev1.HTTPGetAction{
-					Path: "/health",
-					Port: intstr.FromInt32(8000),
-				},
+			HTTPGet: &corev1.HTTPGetAction{
+				Path: "/health",
+				Port: intstr.FromInt32(8000),
 			},
 			InitialDelaySeconds: 5,
 			PeriodSeconds:       10,
@@ -893,12 +848,10 @@ func BuildCloudAPIDeployment(cloud *v1alpha1.Cloud) *appsv1.Deployment {
 	terminationGrace := int64(30)
 
 	return &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        name,
-			Namespace:   cloud.Namespace,
-			Labels:      labels,
-			Annotations: cloud.Spec.Annotations,
-		},
+		Name:        name,
+		Namespace:   cloud.Namespace,
+		Labels:      labels,
+		Annotations: cloud.Spec.Annotations,
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
 			Selector: &metav1.LabelSelector{MatchLabels: selectorLbls},
@@ -962,11 +915,9 @@ func BuildCloudWebDeployment(cloud *v1alpha1.Cloud, brand v1alpha1.BrandConfig) 
 			{Name: "http", ContainerPort: 3001, Protocol: corev1.ProtocolTCP},
 		},
 		LivenessProbe: &corev1.Probe{
-			ProbeHandler: corev1.ProbeHandler{
-				HTTPGet: &corev1.HTTPGetAction{
-					Path: "/",
-					Port: intstr.FromInt32(3001),
-				},
+			HTTPGet: &corev1.HTTPGetAction{
+				Path: "/",
+				Port: intstr.FromInt32(3001),
 			},
 			InitialDelaySeconds: 10,
 			PeriodSeconds:       30,
@@ -974,11 +925,9 @@ func BuildCloudWebDeployment(cloud *v1alpha1.Cloud, brand v1alpha1.BrandConfig) 
 			FailureThreshold:    3,
 		},
 		ReadinessProbe: &corev1.Probe{
-			ProbeHandler: corev1.ProbeHandler{
-				HTTPGet: &corev1.HTTPGetAction{
-					Path: "/",
-					Port: intstr.FromInt32(3001),
-				},
+			HTTPGet: &corev1.HTTPGetAction{
+				Path: "/",
+				Port: intstr.FromInt32(3001),
 			},
 			InitialDelaySeconds: 5,
 			PeriodSeconds:       10,
@@ -1001,12 +950,10 @@ func BuildCloudWebDeployment(cloud *v1alpha1.Cloud, brand v1alpha1.BrandConfig) 
 	terminationGrace := int64(30)
 
 	return &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        name,
-			Namespace:   cloud.Namespace,
-			Labels:      labels,
-			Annotations: cloud.Spec.Annotations,
-		},
+		Name:        name,
+		Namespace:   cloud.Namespace,
+		Labels:      labels,
+		Annotations: cloud.Spec.Annotations,
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
 			Selector: &metav1.LabelSelector{MatchLabels: selectorLbls},
@@ -1036,11 +983,9 @@ func BuildCloudWebDeployment(cloud *v1alpha1.Cloud, brand v1alpha1.BrandConfig) 
 func BuildCloudService(name, ns string, port int32, selectorLabels map[string]string) *corev1.Service {
 	labels := StandardLabels(name, "cloud", "", "")
 	return &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: ns,
-			Labels:    labels,
-		},
+		Name:      name,
+		Namespace: ns,
+		Labels:    labels,
 		Spec: corev1.ServiceSpec{
 			Type:     corev1.ServiceTypeClusterIP,
 			Selector: selectorLabels,
@@ -1084,15 +1029,13 @@ func BuildCloudHPA(name, ns string, targetRef string, spec *v1alpha1.Autoscaling
 	}
 
 	// Aggressive scale-up, conservative scale-down.
-	scaleUp := int32(60)   // 60s stabilization for scale-up
+	scaleUp := int32(60)    // 60s stabilization for scale-up
 	scaleDown := int32(300) // 5min stabilization for scale-down
 
 	return &autoscalingv2.HorizontalPodAutoscaler{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name + "-hpa",
-			Namespace: ns,
-			Labels:    labels,
-		},
+		Name:      name + "-hpa",
+		Namespace: ns,
+		Labels:    labels,
 		Spec: autoscalingv2.HorizontalPodAutoscalerSpec{
 			ScaleTargetRef: autoscalingv2.CrossVersionObjectReference{
 				APIVersion: "apps/v1",
@@ -1132,9 +1075,7 @@ func BuildCloudAPIIngress(cloud *v1alpha1.Cloud) *networkingv1.Ingress {
 			}
 			annotations["cert-manager.io/cluster-issuer"] = clusterIssuer
 		}
-		for k, v := range cloud.Spec.Ingress.Annotations {
-			annotations[k] = v
-		}
+		maps.Copy(annotations, cloud.Spec.Ingress.Annotations)
 	}
 
 	var rules []networkingv1.IngressRule
@@ -1171,32 +1112,27 @@ func BuildCloudAPIIngress(cloud *v1alpha1.Cloud) *networkingv1.Ingress {
 		for _, host := range []string{apiHost, wsHost} {
 			rules = append(rules, networkingv1.IngressRule{
 				Host: host,
-				IngressRuleValue: networkingv1.IngressRuleValue{
-					HTTP: &networkingv1.HTTPIngressRuleValue{
-						Paths: []networkingv1.HTTPIngressPath{{
-							Path:     "/",
-							PathType: &pathType,
-							Backend: networkingv1.IngressBackend{
-								Service: &networkingv1.IngressServiceBackend{
-									Name: apiSvcName,
-									Port: networkingv1.ServiceBackendPort{Number: 8000},
-								},
+				HTTP: &networkingv1.HTTPIngressRuleValue{
+					Paths: []networkingv1.HTTPIngressPath{{
+						Path:     "/",
+						PathType: &pathType,
+						Backend: networkingv1.IngressBackend{
+							Service: &networkingv1.IngressServiceBackend{
+								Name: apiSvcName,
+								Port: networkingv1.ServiceBackendPort{Number: 8000},
 							},
-						}},
-					},
+						},
+					}},
 				},
 			})
 		}
 	}
 
-
 	ing := &networkingv1.Ingress{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        name,
-			Namespace:   cloud.Namespace,
-			Labels:      labels,
-			Annotations: annotations,
-		},
+		Name:        name,
+		Namespace:   cloud.Namespace,
+		Labels:      labels,
+		Annotations: annotations,
 		Spec: networkingv1.IngressSpec{
 			Rules: rules,
 			TLS:   tls,
@@ -1229,9 +1165,7 @@ func BuildCloudWebIngress(cloud *v1alpha1.Cloud, brand v1alpha1.BrandConfig) *ne
 			}
 			annotations["cert-manager.io/cluster-issuer"] = clusterIssuer
 		}
-		for k, v := range cloud.Spec.Ingress.Annotations {
-			annotations[k] = v
-		}
+		maps.Copy(annotations, cloud.Spec.Ingress.Annotations)
 	}
 
 	webHost := brand.Domain
@@ -1239,19 +1173,17 @@ func BuildCloudWebIngress(cloud *v1alpha1.Cloud, brand v1alpha1.BrandConfig) *ne
 	rules := []networkingv1.IngressRule{
 		{
 			Host: webHost,
-			IngressRuleValue: networkingv1.IngressRuleValue{
-				HTTP: &networkingv1.HTTPIngressRuleValue{
-					Paths: []networkingv1.HTTPIngressPath{{
-						Path:     "/",
-						PathType: &pathType,
-						Backend: networkingv1.IngressBackend{
-							Service: &networkingv1.IngressServiceBackend{
-								Name: webSvcName,
-								Port: networkingv1.ServiceBackendPort{Number: 3001},
-							},
+			HTTP: &networkingv1.HTTPIngressRuleValue{
+				Paths: []networkingv1.HTTPIngressPath{{
+					Path:     "/",
+					PathType: &pathType,
+					Backend: networkingv1.IngressBackend{
+						Service: &networkingv1.IngressServiceBackend{
+							Name: webSvcName,
+							Port: networkingv1.ServiceBackendPort{Number: 3001},
 						},
-					}},
-				},
+					},
+				}},
 			},
 		},
 	}
@@ -1265,12 +1197,10 @@ func BuildCloudWebIngress(cloud *v1alpha1.Cloud, brand v1alpha1.BrandConfig) *ne
 	}
 
 	ing := &networkingv1.Ingress{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        name,
-			Namespace:   cloud.Namespace,
-			Labels:      labels,
-			Annotations: annotations,
-		},
+		Name:        name,
+		Namespace:   cloud.Namespace,
+		Labels:      labels,
+		Annotations: annotations,
 		Spec: networkingv1.IngressSpec{
 			Rules: rules,
 			TLS:   tls,

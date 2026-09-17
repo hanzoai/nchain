@@ -2,6 +2,7 @@ package manifests
 
 import (
 	"fmt"
+	"maps"
 
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
@@ -23,18 +24,14 @@ func MutateFuncFor(existing, desired client.Object) controllerutil.MutateFn {
 		if existingLabels == nil {
 			existingLabels = make(map[string]string)
 		}
-		for k, v := range desired.GetLabels() {
-			existingLabels[k] = v
-		}
+		maps.Copy(existingLabels, desired.GetLabels())
 		existing.SetLabels(existingLabels)
 
 		existingAnnotations := existing.GetAnnotations()
 		if existingAnnotations == nil {
 			existingAnnotations = make(map[string]string)
 		}
-		for k, v := range desired.GetAnnotations() {
-			existingAnnotations[k] = v
-		}
+		maps.Copy(existingAnnotations, desired.GetAnnotations())
 		existing.SetAnnotations(existingAnnotations)
 
 		// Copy spec fields based on concrete type.

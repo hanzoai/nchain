@@ -62,11 +62,9 @@ func (r *BridgeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	serverLabels := manifests.StandardLabels(bridge.Name+"-server", "bridge-server", bridge.Name, "")
 	serverSelector := manifests.SelectorLabels(bridge.Name + "-server")
 	serverSvc := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      bridge.Name + "-server",
-			Namespace: bridge.Namespace,
-			Labels:    serverLabels,
-		},
+		Name:      bridge.Name + "-server",
+		Namespace: bridge.Namespace,
+		Labels:    serverLabels,
 		Spec: corev1.ServiceSpec{
 			Type:     corev1.ServiceTypeClusterIP,
 			Selector: serverSelector,
@@ -104,11 +102,9 @@ func (r *BridgeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		uiLabels := manifests.StandardLabels(bridge.Name+"-ui", "bridge-ui", bridge.Name, "")
 		uiSelector := manifests.SelectorLabels(bridge.Name + "-ui")
 		uiSvc := &corev1.Service{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      bridge.Name + "-ui",
-				Namespace: bridge.Namespace,
-				Labels:    uiLabels,
-			},
+			Name:      bridge.Name + "-ui",
+			Namespace: bridge.Namespace,
+			Labels:    uiLabels,
 			Spec: corev1.ServiceSpec{
 				Type:     corev1.ServiceTypeClusterIP,
 				Selector: uiSelector,

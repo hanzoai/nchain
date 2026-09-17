@@ -24,6 +24,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"sort"
 	"strconv"
@@ -111,14 +112,14 @@ func replicationEnv(spec *v1alpha1.ReplicationSpec) ([]corev1.EnvVar, []corev1.E
 	var from []corev1.EnvFromSource
 	if spec.CredentialsSecret != "" {
 		from = append(from, corev1.EnvFromSource{SecretRef: &corev1.SecretEnvSource{
-			LocalObjectReference: corev1.LocalObjectReference{Name: spec.CredentialsSecret},
+			Name: spec.CredentialsSecret,
 		}})
 	}
 	// AgeIdentitySecret holds REPLICATE_AGE_IDENTITY — the private key used to
 	// decrypt snapshots during restore-on-boot. Kept separate from S3 creds.
 	if spec.AgeIdentitySecret != "" {
 		from = append(from, corev1.EnvFromSource{SecretRef: &corev1.SecretEnvSource{
-			LocalObjectReference: corev1.LocalObjectReference{Name: spec.AgeIdentitySecret},
+			Name: spec.AgeIdentitySecret,
 		}})
 	}
 	return env, from
@@ -137,18 +138,14 @@ func buildPerPodService(cluster *v1alpha1.NodeCluster, index, rpcPort, p2pPort i
 
 	annotations := map[string]string{}
 	if cluster.Spec.PerPodService != nil {
-		for k, v := range cluster.Spec.PerPodService.Annotations {
-			annotations[k] = v
-		}
+		maps.Copy(annotations, cluster.Spec.PerPodService.Annotations)
 	}
 
 	return &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        name,
-			Namespace:   cluster.Namespace,
-			Labels:      labels,
-			Annotations: annotations,
-		},
+		Name:        name,
+		Namespace:   cluster.Namespace,
+		Labels:      labels,
+		Annotations: annotations,
 		Spec: corev1.ServiceSpec{
 			Type:     corev1.ServiceTypeLoadBalancer,
 			Selector: selector,
@@ -188,7 +185,7 @@ func buildStartupGateInitContainer(cluster *v1alpha1.NodeCluster, image, healthP
 	}
 
 	var targets []string
-	for i := int32(0); i < replicas; i++ {
+	for i := range replicas {
 		targets = append(targets, fmt.Sprintf("%s-%d.%s-headless:%d", cluster.Name, i, cluster.Name, healthPort))
 	}
 
@@ -372,7 +369,7 @@ func buildSnapshotCronJob(cluster *v1alpha1.NodeCluster, image string, rpcPort i
 	var envFrom []corev1.EnvFromSource
 	if spec.S3CredentialsSecret != "" {
 		envFrom = append(envFrom, corev1.EnvFromSource{SecretRef: &corev1.SecretEnvSource{
-			LocalObjectReference: corev1.LocalObjectReference{Name: spec.S3CredentialsSecret},
+			Name: spec.S3CredentialsSecret,
 		}})
 	}
 
@@ -395,11 +392,9 @@ echo "snapshot: retained latest ${MAX_RETAINED}"
 	failedLimit := int32(3)
 
 	return &batchv1.CronJob{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cluster.Name + "-snapshot",
-			Namespace: cluster.Namespace,
-			Labels:    labels,
-		},
+		Name:      cluster.Name + "-snapshot",
+		Namespace: cluster.Namespace,
+		Labels:    labels,
 		Spec: batchv1.CronJobSpec{
 			Schedule:                   spec.Schedule,
 			ConcurrencyPolicy:          batchv1.ForbidConcurrent,
@@ -643,7 +638,7 @@ func (r *NodeClusterReconciler) pollHealth(ctx context.Context, cluster *v1alpha
 // IP (or hostname) and returns a pod-name -> address map.
 func (r *NodeClusterReconciler) discoverExternalIPs(ctx context.Context, cluster *v1alpha1.NodeCluster, replicas int32) map[string]string {
 	ips := map[string]string{}
-	for i := int32(0); i < replicas; i++ {
+	for i := range replicas {
 		name := fmt.Sprintf("%s-%d", cluster.Name, i)
 		var svc corev1.Service
 		if err := r.Get(ctx, client.ObjectKey{Name: name, Namespace: cluster.Namespace}, &svc); err != nil {
@@ -703,9 +698,7 @@ func (r *NodeClusterReconciler) reconcileSnapshotCronJob(ctx context.Context, cl
 	if existing.Labels == nil {
 		existing.Labels = map[string]string{}
 	}
-	for k, v := range desired.Labels {
-		existing.Labels[k] = v
-	}
+	maps.Copy(existing.Labels, desired.Labels)
 	if err := r.Update(ctx, &existing); err != nil {
 		return err
 	}

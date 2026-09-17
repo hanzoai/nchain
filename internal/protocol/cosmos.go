@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"fmt"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -50,14 +51,14 @@ func (d *CosmosDriver) BuildCommand(spec *v1alpha1.NodeClusterSpec) ([]string, [
 
 	// Bootstrap peers.
 	if len(spec.P2P.BootstrapNodes) > 0 {
-		persistent := ""
+		var persistent strings.Builder
 		for i, node := range spec.P2P.BootstrapNodes {
 			if i > 0 {
-				persistent += ","
+				persistent.WriteString(",")
 			}
-			persistent += node
+			persistent.WriteString(node)
 		}
-		args = append(args, fmt.Sprintf("--p2p.persistent_peers=%s", persistent))
+		args = append(args, fmt.Sprintf("--p2p.persistent_peers=%s", persistent.String()))
 	}
 
 	return []string{"gaiad"}, args
@@ -108,28 +109,28 @@ func (d *CosmosDriver) RecommendedResources(role string) (corev1.ResourceList, c
 	switch role {
 	case "archive":
 		return corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("8"),
-				corev1.ResourceMemory: resource.MustParse("32Gi"),
-			}, corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("16"),
-				corev1.ResourceMemory: resource.MustParse("64Gi"),
-			}
+			corev1.ResourceCPU:    resource.MustParse("8"),
+			corev1.ResourceMemory: resource.MustParse("32Gi"),
+		}, corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("16"),
+			corev1.ResourceMemory: resource.MustParse("64Gi"),
+		}
 	case "validator":
 		return corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("4"),
-				corev1.ResourceMemory: resource.MustParse("32Gi"),
-			}, corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("8"),
-				corev1.ResourceMemory: resource.MustParse("64Gi"),
-			}
+			corev1.ResourceCPU:    resource.MustParse("4"),
+			corev1.ResourceMemory: resource.MustParse("32Gi"),
+		}, corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("8"),
+			corev1.ResourceMemory: resource.MustParse("64Gi"),
+		}
 	default: // fullnode
 		return corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("4"),
-				corev1.ResourceMemory: resource.MustParse("16Gi"),
-			}, corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("8"),
-				corev1.ResourceMemory: resource.MustParse("32Gi"),
-			}
+			corev1.ResourceCPU:    resource.MustParse("4"),
+			corev1.ResourceMemory: resource.MustParse("16Gi"),
+		}, corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("8"),
+			corev1.ResourceMemory: resource.MustParse("32Gi"),
+		}
 	}
 }
 

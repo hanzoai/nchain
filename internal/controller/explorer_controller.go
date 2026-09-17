@@ -78,11 +78,9 @@ func (r *ExplorerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	backendLabels := manifests.StandardLabels(explorer.Name+"-backend", "explorer-backend", explorer.Name, "")
 	backendSelector := manifests.SelectorLabels(explorer.Name + "-backend")
 	backendSvc := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      explorer.Name + "-backend",
-			Namespace: explorer.Namespace,
-			Labels:    backendLabels,
-		},
+		Name:      explorer.Name + "-backend",
+		Namespace: explorer.Namespace,
+		Labels:    backendLabels,
 		Spec: corev1.ServiceSpec{
 			Type:     corev1.ServiceTypeClusterIP,
 			Selector: backendSelector,
@@ -121,11 +119,9 @@ func (r *ExplorerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		frontendLabels := manifests.StandardLabels(explorer.Name+"-frontend", "explorer-frontend", explorer.Name, "")
 		frontendSelector := manifests.SelectorLabels(explorer.Name + "-frontend")
 		frontendSvc := &corev1.Service{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      explorer.Name + "-frontend",
-				Namespace: explorer.Namespace,
-				Labels:    frontendLabels,
-			},
+			Name:      explorer.Name + "-frontend",
+			Namespace: explorer.Namespace,
+			Labels:    frontendLabels,
 			Spec: corev1.ServiceSpec{
 				Type:     corev1.ServiceTypeClusterIP,
 				Selector: frontendSelector,
